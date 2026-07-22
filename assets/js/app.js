@@ -1,0 +1,281 @@
+/* Mobsie Connect — app shell: sidebar, topbar, router, global search */
+(function(){
+  const $=(s,r)=>(r||document).querySelector(s);
+  const esc=UI.esc;
+
+  const NAV=[
+    {items:[{route:'dashboard',label:'Dashboard',icon:'dashboard',accent:true}]},
+    {section:'Platform',items:[
+      {route:'schools',label:'Schools',icon:'school'},
+      {route:'branches',label:'Branches',icon:'branches'}]},
+    {section:'Admissions',items:[
+      {route:'applications',label:'Applications',icon:'applications',badge:24},
+      {route:'interviews',label:'Interviews',icon:'interviews'},
+      {route:'waiting-list',label:'Waiting List',icon:'waiting'}]},
+    {section:'Students',items:[
+      {route:'learners',label:'Learners',icon:'learners'},
+      {route:'parents',label:'Parents',icon:'parents'},
+      {route:'teachers',label:'Teachers',icon:'teachers'}]},
+    {section:'Academics',items:[
+      {route:'attendance',label:'Attendance',icon:'attendance'},
+      {route:'homework',label:'Homework',icon:'homework'},
+      {route:'reports',label:'Reports',icon:'reports'},
+      {route:'calendar',label:'Calendar',icon:'calendar'}]},
+    {section:'Finance',items:[
+      {route:'payments',label:'Payments',icon:'payments'},
+      {route:'invoices',label:'Invoices',icon:'invoices'},
+      {route:'statements',label:'Statements',icon:'statements'},
+      {route:'discounts',label:'Discounts',icon:'discounts'}]},
+    {section:'Communications',items:[
+      {route:'messages',label:'Messages',icon:'messages',badge:8},
+      {route:'newsletters',label:'Newsletters',icon:'newsletters'},
+      {route:'push',label:'Push Notifications',icon:'push'},
+      {route:'sms',label:'SMS',icon:'sms'},
+      {route:'campaigns',label:'Email Campaigns',icon:'campaigns'},
+      {route:'feedback',label:'Feedback Centre',icon:'feedback'}]},
+    {section:'Media',items:[
+      {route:'gallery',label:'Gallery',icon:'gallery'},
+      {route:'media',label:'Media Library',icon:'media'}]},
+    {section:'Shop',items:[
+      {route:'products',label:'Products',icon:'products'},
+      {route:'orders',label:'Orders',icon:'orders'},
+      {route:'inventory',label:'Inventory',icon:'inventory'}]},
+    {section:'Analytics',items:[{route:'analytics',label:'Analytics',icon:'analytics'}]},
+    {section:'Documents',items:[{route:'documents',label:'Documents',icon:'documents'}]},
+    {section:'Support',items:[{route:'support',label:'Support Tickets',icon:'support'}]},
+    {section:'Users & Roles',items:[
+      {route:'users',label:'Users',icon:'users'},
+      {route:'roles',label:'Roles & Permissions',icon:'roles'}]},
+    {section:'System',items:[
+      {route:'audit',label:'Audit Logs',icon:'audit'},
+      {route:'settings',label:'Settings',icon:'settings'}]},
+  ];
+
+  const App={
+    ctx:{school:null,branch:null},
+    route:'dashboard',
+    go(r){ location.hash='#/'+r; },
+    school(){ return this.ctx.school?DB.schools.find(s=>s.id===this.ctx.school):null; },
+    branchObj(){ return this.ctx.branch?DB.branches.find(b=>b.id===this.ctx.branch):null; },
+    scopeLabel(){ const s=this.school(); return s?s.name:'All Schools'; },
+    // Filter helper — rows carrying schoolId / school name fields
+    scoped(rows){
+      const s=this.school(); if(!s) return rows;
+      const b=this.branchObj();
+      return rows.filter(r=>{
+        const okS=(r.schoolId&&r.schoolId===s.id)||(r.school&&r.school===s.name);
+        const okB=!b||!r.branch||r.branch===b.name;
+        return okS&&okB;
+      });
+    },
+  };
+  window.App=App;
+
+  /* ---- Sidebar ---- */
+  const LOGO=`<svg class="mark" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="19" fill="#F97316"/><circle cx="41" cy="25" r="12" fill="#22C55E"/><circle cx="25" cy="39" r="12" fill="#fff"/><circle cx="41" cy="25" r="5" fill="#fff" opacity=".35"/></svg>`;
+  function renderSidebar(){
+    const sb=$('#sidebar');
+    sb.innerHTML=`
+      <div class="side-logo">${LOGO}<div><div class="name">Mobsie Connect</div><div class="sub">Control Centre</div></div></div>
+      <nav class="side-nav">${NAV.map(g=>
+        (g.section?`<div class="side-section">${esc(g.section)}</div>`:'')+
+        g.items.map(it=>`
+          <a class="side-item ${App.route===it.route?'active':''}" href="#/${it.route}" data-route="${it.route}">
+            ${MCIcon(it.icon)}<span>${esc(it.label)}</span>
+            ${it.badge?`<span class="side-badge">${it.badge}</span>`:(it.accent&&App.route===it.route?MCIcon('chevDown','chev'):'')}
+          </a>`).join('')
+      ).join('')}</nav>
+      <div class="side-foot"><div class="help-pill" id="helpPill"><span class="q">?</span> Help Centre</div></div>`;
+    $('#helpPill').addEventListener('click',()=>UI.toast('Help Centre opens in a new tab in the full build','info'));
+  }
+  function markActive(){
+    document.querySelectorAll('.side-item').forEach(a=>{
+      a.classList.toggle('active',a.dataset.route===App.route);
+    });
+  }
+
+  /* ---- Topbar ---- */
+  const NOTIFS=[
+    {icon:'applications',tint:'t-orange',t:'24 applications awaiting review',s:'Admissions · today'},
+    {icon:'alert',tint:'t-red',t:'Payment failed — Rainbow Bridge Academy',s:'Billing · 32m ago'},
+    {icon:'support',tint:'t-purple',t:'2 urgent support tickets open',s:'Support · 1h ago'},
+    {icon:'school',tint:'t-green',t:'New school onboarded: Dinaledi Educare',s:'Platform · 3h ago'},
+    {icon:'server',tint:'t-blue',t:'Nightly backup completed in 4m 12s',s:'System · 02:00'},
+  ];
+  function renderTopbar(){
+    const tb=$('#topbar');
+    const pageTitle=findNav(App.route)?.label||'Dashboard';
+    const br=App.branchObj();
+    tb.innerHTML=`
+      <button class="tb-burger" id="tbBurger" aria-label="Toggle navigation">${MCIcon('menu')}</button>
+      <div class="tb-title">${esc(pageTitle)}</div>
+      <div class="tb-search" id="tbSearch">${MCIcon('search')}<span>Search for schools, branches, students, parents…</span><span class="hint">⌘K</span></div>
+      <div class="tb-right">
+        <button class="tb-select" id="selSchool"><span class="ic orange">${MCIcon('school')}</span>${esc(App.scopeLabel())} ${MCIcon('chevDown','chev')}</button>
+        <button class="tb-select" id="selBranch"><span class="ic green">${MCIcon('branches')}</span>${esc(br?br.name:'All Branches')} ${MCIcon('chevDown','chev')}</button>
+        <button class="tb-icon" id="tbBell">${MCIcon('bell')}<span class="dot">12</span></button>
+        <button class="tb-icon" id="tbChat">${MCIcon('chat')}<span class="dot orange">9</span></button>
+        <div class="tb-user" id="tbUser">${UI.avatar('Thandi Admin')}
+          <div class="who"><div class="nm">Thandi Admin</div><div class="rl">Super Admin</div></div>${MCIcon('chevDown','chev')}</div>
+      </div>`;
+    $('#tbBurger').addEventListener('click',()=>$('#app').classList.toggle('side-open'));
+    $('#tbSearch').addEventListener('click',openSearch);
+    $('#selSchool').addEventListener('click',e=>schoolMenu(e.currentTarget));
+    $('#selBranch').addEventListener('click',e=>branchMenu(e.currentTarget));
+    $('#tbBell').addEventListener('click',e=>{
+      UI.menu(e.currentTarget,NOTIFS.map(n=>({icon:n.icon,label:n.t,onClick:()=>{}})),{head:'Notifications',align:'right'});
+    });
+    $('#tbChat').addEventListener('click',()=>App.go('messages'));
+    $('#tbUser').addEventListener('click',e=>{
+      UI.menu(e.currentTarget,[
+        {icon:'users',label:'My profile',onClick:()=>UI.toast('Profile coming soon')},
+        {icon:'settings',label:'Preferences',onClick:()=>App.go('settings')},
+        '-',
+        {icon:'logout',label:'Sign out',onClick:()=>UI.toast('Signed out (demo)')},
+      ],{align:'right'});
+    });
+  }
+  function schoolMenu(anchor){
+    const items=[{label:'All Schools',icon:'grid',checked:!App.ctx.school,onClick:()=>{App.ctx.school=null;App.ctx.branch=null;rerender();}}]
+      .concat(DB.schools.slice(0,14).map(s=>({label:s.name,icon:'school',checked:App.ctx.school===s.id,
+        onClick:()=>{App.ctx.school=s.id;App.ctx.branch=null;rerender();UI.toast('Now viewing '+s.name);}})));
+    UI.menu(anchor,items,{head:'Jump into a school',align:'right',scroll:true});
+  }
+  function branchMenu(anchor){
+    const s=App.school();
+    if(!s){ UI.menu(anchor,[{label:'Select a school first',icon:'info',onClick:()=>{}}],{head:'Branches',align:'right'}); return; }
+    const brs=DB.branches.filter(b=>b.schoolId===s.id);
+    const items=[{label:'All Branches',icon:'grid',checked:!App.ctx.branch,onClick:()=>{App.ctx.branch=null;rerender();}}]
+      .concat(brs.map(b=>({label:b.name,icon:'branches',checked:App.ctx.branch===b.id,
+        onClick:()=>{App.ctx.branch=b.id;rerender();}})));
+    UI.menu(anchor,items,{head:s.name,align:'right',scroll:true});
+  }
+
+  function findNav(route){
+    for(const g of NAV) for(const it of g.items) if(it.route===route) return it;
+    return null;
+  }
+
+  /* ---- Router ---- */
+  function currentRoute(){
+    const h=location.hash.replace(/^#\/?/,'');
+    return h&&window.Pages[h]?h:'dashboard';
+  }
+  function rerender(){
+    renderTopbar();
+    renderPage();
+  }
+  function renderPage(){
+    const page=window.Pages[App.route];
+    const c=$('#content');
+    c.innerHTML=page.render();
+    UI.hydrate(c);
+    if(page.mount) page.mount(c);
+    c.scrollTop=0; window.scrollTo(0,0);
+  }
+  function onRoute(){
+    App.route=currentRoute();
+    $('#app').classList.remove('side-open');
+    markActive();
+    rerender();
+  }
+
+  /* ---- Global search (⌘K) ---- */
+  function searchIndex(){
+    const ix=[];
+    DB.schools.slice(0,40).forEach(s=>ix.push({kind:'School',icon:'school',tint:'t-orange',nm:s.name,sub:s.city+' · '+s.branches+' branches',route:'schools'}));
+    DB.branches.slice(0,40).forEach(b=>ix.push({kind:'Branch',icon:'branches',tint:'t-green',nm:b.name,sub:b.school,route:'branches'}));
+    DB.teachers.forEach(t=>ix.push({kind:'Teacher',icon:'teachers',tint:'t-purple',nm:t.name,sub:t.school+' · '+t.cls,route:'teachers'}));
+    DB.parents.forEach(p=>ix.push({kind:'Parent',icon:'parents',tint:'t-blue',nm:p.name,sub:p.school,route:'parents'}));
+    DB.learners.forEach(l=>ix.push({kind:'Learner',icon:'learners',tint:'t-teal',nm:l.name,sub:l.school+' · '+l.grade,route:'learners'}));
+    DB.invoices.slice(0,20).forEach(i=>ix.push({kind:'Invoice',icon:'invoices',tint:'t-amber',nm:i.id+' — '+i.parent,sub:i.desc,route:'invoices'}));
+    DB.documentsList.forEach(d=>ix.push({kind:'Document',icon:'documents',tint:'t-ink',nm:d.name,sub:d.folder,route:'documents'}));
+    DB.tickets.forEach(t=>ix.push({kind:'Ticket',icon:'support',tint:'t-red',nm:t.id+' — '+t.subject,sub:t.school,route:'support'}));
+    return ix;
+  }
+  let _ix=null,_sel=0;
+  function openSearch(){
+    _ix=_ix||searchIndex();
+    const ov=$('#searchOverlay');
+    ov.hidden=false;
+    ov.innerHTML=`<div class="search-panel">
+      <div class="search-input-row">${MCIcon('search')}<input id="gsInput" placeholder="Search schools, branches, people, invoices, documents…" autocomplete="off"><span class="esc">ESC</span></div>
+      <div class="search-results" id="gsResults"></div></div>`;
+    const input=$('#gsInput');
+    renderResults('');
+    input.focus();
+    input.addEventListener('input',()=>{_sel=0;renderResults(input.value);});
+    ov.addEventListener('mousedown',e=>{ if(e.target===ov) closeSearch(); });
+  }
+  function renderResults(q){
+    const res=$('#gsResults'); if(!res) return;
+    q=q.trim().toLowerCase();
+    let hits=q?_ix.filter(i=>(i.nm+' '+i.sub+' '+i.kind).toLowerCase().includes(q)).slice(0,12)
+             :_ix.slice(0,3).concat(_ix.filter(i=>i.kind==='Teacher').slice(0,2),_ix.filter(i=>i.kind==='Parent').slice(0,2));
+    if(!hits.length){ res.innerHTML=`<div class="sr-empty">No results for “${esc(q)}”. Try a school, parent or invoice number.</div>`; return; }
+    let out='',lastKind='';
+    hits.forEach((h,i)=>{
+      if(h.kind!==lastKind){ out+=`<div class="sr-group">${h.kind}s</div>`; lastKind=h.kind; }
+      out+=`<div class="sr-item ${i===_sel?'sel':''}" data-i="${i}">
+        <span class="sr-ic ${h.tint}">${MCIcon(h.icon)}</span>
+        <span class="sr-txt"><span class="sr-nm">${esc(h.nm)}</span><span class="sr-sub">${esc(h.sub)}</span></span>
+        <span class="sr-kind">${h.kind}</span></div>`;
+    });
+    res.innerHTML=out;
+    res.querySelectorAll('.sr-item').forEach(el=>el.addEventListener('click',()=>{
+      const h=hits[+el.dataset.i]; closeSearch(); App.go(h.route);
+    }));
+    res._hits=hits;
+  }
+  function closeSearch(){ const ov=$('#searchOverlay'); ov.hidden=true; ov.innerHTML=''; }
+  document.addEventListener('keydown',e=>{
+    if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); openSearch(); }
+    const ov=$('#searchOverlay');
+    if(!ov.hidden){
+      const res=$('#gsResults');
+      if(e.key==='Escape') closeSearch();
+      else if(e.key==='ArrowDown'){ e.preventDefault(); _sel=Math.min((res._hits||[]).length-1,_sel+1); refreshSel(res); }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); _sel=Math.max(0,_sel-1); refreshSel(res); }
+      else if(e.key==='Enter'&&res._hits&&res._hits[_sel]){ const h=res._hits[_sel]; closeSearch(); App.go(h.route); }
+    } else if(e.key==='Escape'){ UI.closeMenu(); }
+  });
+  function refreshSel(res){ res.querySelectorAll('.sr-item').forEach((el,i)=>el.classList.toggle('sel',i===_sel)); }
+
+  /* ---- Chart tooltip delegation ---- */
+  const tipEl=$('#chartTip');
+  document.addEventListener('mouseover',e=>{
+    const hit=e.target.closest&&e.target.closest('.ct-hit');
+    if(hit&&hit.dataset.tip){
+      try{
+        const d=JSON.parse(decodeURIComponent(hit.dataset.tip));
+        tipEl.innerHTML=`<div class="tt-h">${esc(d.h)}</div>`+
+          d.rows.map(r=>`<div class="tt-r"><span class="sw" style="background:${r.c}"></span>${esc(r.l)}<b>${esc(r.v)}</b></div>`).join('');
+        tipEl.hidden=false;
+      }catch(_){}
+    }
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!tipEl.hidden){
+      const hit=e.target.closest&&e.target.closest('.ct-hit');
+      if(!hit){ tipEl.hidden=true; return; }
+      const x=Math.max(90,Math.min(e.clientX,innerWidth-90));
+      tipEl.style.left=x+'px'; tipEl.style.top=e.clientY+'px';
+    }
+  });
+  document.addEventListener('mouseout',e=>{
+    if(e.target.closest&&e.target.closest('.ct-hit')&&!(e.relatedTarget&&e.relatedTarget.closest&&e.relatedTarget.closest('.ct-hit')))
+      tipEl.hidden=true;
+  });
+  // crosshair line reveal
+  const st=document.createElement('style');
+  st.textContent='.ct-hit:hover .xh{opacity:1 !important}';
+  document.head.appendChild(st);
+
+  /* ---- Scrim ---- */
+  $('#sidebarScrim').addEventListener('click',()=>$('#app').classList.remove('side-open'));
+
+  /* ---- Boot ---- */
+  window.addEventListener('hashchange',onRoute);
+  renderSidebar();
+  onRoute();
+})();
