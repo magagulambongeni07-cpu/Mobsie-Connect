@@ -197,7 +197,9 @@ window.Pages=window.Pages||{};
   Pages['waiting-list']={
     render:renderWaiting,
     mount(root){
-      root.querySelectorAll('[data-offer]').forEach(b=>b.addEventListener('click',()=>UI.toast('Offer sent — family has 48 hours to accept')));
+      root.addEventListener('click',e=>{
+        if(e.target.closest('[data-offer]')) UI.toast('Offer sent — family has 48 hours to accept');
+      });
     }
   };
 })();

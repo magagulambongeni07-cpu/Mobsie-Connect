@@ -159,18 +159,18 @@
   function heatmap(opts){
     const {rows,cols,data}=opts; // data[r][c] = 0..100 or null
     const ramp=v=>v==null?'#F1F5F9':v>=96?'#15803D':v>=92?'#22C55E':v>=88?'#4ADE80':v>=84?'#86EFAC':'#DCFCE7';
-    const cell=26,gap=4,padL=94,padT=24;
+    const cell=38,gap=6,padL=94,padT=26;
     const W=padL+cols.length*(cell+gap), H=padT+rows.length*(cell+gap)+4;
     let g='';
-    cols.forEach((c,j)=>{ g+=`<text x="${padL+j*(cell+gap)+cell/2}" y="14" text-anchor="middle" font-size="10" fill="${TICK}">${esc(c)}</text>`; });
+    cols.forEach((c,j)=>{ g+=`<text x="${padL+j*(cell+gap)+cell/2}" y="14" text-anchor="middle" font-size="10.5" fill="${TICK}">${esc(c)}</text>`; });
     rows.forEach((r,i)=>{
       g+=`<text x="${padL-10}" y="${padT+i*(cell+gap)+cell/2+3.5}" text-anchor="end" font-size="11" font-weight="600" fill="#475569">${esc(r)}</text>`;
       cols.forEach((c,j)=>{
         const v=data[i][j];
         const dark=v!=null&&v>=92;
         g+=`<g class="ct-hit" data-tip="${tip({h:r+' · '+c,rows:[{c:ramp(v),l:'Attendance',v:v==null?'—':v+'%'}]})}">`+
-          `<rect x="${padL+j*(cell+gap)}" y="${padT+i*(cell+gap)}" width="${cell}" height="${cell}" rx="6" fill="${ramp(v)}"/>`+
-          (v!=null?`<text x="${padL+j*(cell+gap)+cell/2}" y="${padT+i*(cell+gap)+cell/2+3.5}" text-anchor="middle" font-size="8.5" font-weight="700" fill="${dark?'#fff':'#166534'}">${v}</text>`:'')+`</g>`;
+          `<rect x="${padL+j*(cell+gap)}" y="${padT+i*(cell+gap)}" width="${cell}" height="${cell}" rx="9" fill="${ramp(v)}"/>`+
+          (v!=null?`<text x="${padL+j*(cell+gap)+cell/2}" y="${padT+i*(cell+gap)+cell/2+3.5}" text-anchor="middle" font-size="10.5" font-weight="700" fill="${dark?'#fff':'#166534'}">${v}</text>`:'')+`</g>`;
       });
     });
     return `<svg viewBox="0 0 ${W} ${H}" role="img" style="max-width:${W}px">${g}</svg>`;

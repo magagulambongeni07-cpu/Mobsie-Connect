@@ -173,7 +173,7 @@
     msgs.push({dir:'in',text:'Thank you so much, I appreciate it!',time:`${ri(10,11)}:${ri(10,59)}`});
     msgs.push({dir:'out',text:'All sorted! You should see the update in your Mobsie app now. Have a lovely day!',time:`${ri(10,11)}:${ri(10,59)}`});
     return {id:'c-'+i,who:p.name,school:p.school,branch:p.branch,unread:i<3?ri(1,4):0,
-      time:i<4?`${ri(2,55)}m`:`${ri(1,9)}h`,msgs,preview:msgs[msgs.length-1].text};
+      time:i<4?`${ri(2,55)}m`:`${ri(1,9)}h`,msgs,preview:msgs[0].text};
   });
   const newsletters=[
     {title:'May Updates',audience:'Entire Platform',sent:'May 17, 2026',recipients:18742,openRate:64,status:'Sent'},

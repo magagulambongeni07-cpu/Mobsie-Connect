@@ -26,19 +26,19 @@ window.Pages=window.Pages||{};
     const overviewBody=`
       <div class="kpi-row">
         <div class="kpi"><div class="k-lbl">Revenue</div><div class="k-val">R2,450,800</div>${UI.delta(12.5,'up','vs last month')}</div>
-        <div class="kpi"><div class="k-lbl">MRR</div><div class="k-val">${DB.fmtRk(t.mrr)}</div>${UI.delta(9.3,'up','vs last month')}</div>
+        <div class="kpi"><div class="k-lbl">MRR</div><div class="k-val">${DB.fmtR(t.mrr)}</div>${UI.delta(9.3,'up','vs last month')}</div>
         <div class="kpi"><div class="k-lbl">Outstanding Fees</div><div class="k-val">R320,450</div>${UI.delta(4.2,'up','vs last month')}</div>
         <div class="kpi"><div class="k-lbl">Active Users</div><div class="k-val">32,456</div>${UI.delta(8.7,'up','vs last month')}</div>
       </div>
       ${UI.legend([{color:'#EA580C',label:'Revenue',line:true},{color:'#16A34A',label:'MRR',line:true}])}
       <div class="chart-box" style="margin-top:8px">${Charts.line({labels:rs.labels,series:[
         {name:'Revenue',color:'#EA580C',data:rs.revenue},
-        {name:'MRR',color:'#16A34A',data:rs.mrr},
+        {name:'MRR',color:'#16A34A',data:rs.mrr,area:false},
       ],height:252})}</div>`;
 
     const appSegs=[
-      {label:'Pending Review',value:DB.appCounts[0],color:'#F59E0B'},
-      {label:'Documents Required',value:DB.appCounts[1],color:'#FB923C'},
+      {label:'Pending Review',value:DB.appCounts[0],color:'#F97316'},
+      {label:'Documents Required',value:DB.appCounts[1],color:'#F5C445'},
       {label:'Interview Scheduled',value:DB.appCounts[2],color:'#0D9488'},
       {label:'Approved',value:DB.appCounts[3],color:'#16A34A'},
       {label:'Rejected',value:DB.appCounts[4],color:'#DC2626'},

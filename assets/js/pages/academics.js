@@ -6,7 +6,7 @@ window.Pages=window.Pages||{};
   /* ---------- Attendance ---------- */
   Pages.attendance={
     render(){
-      const days=['Mon 11','Tue 12','Wed 13','Thu 14','Fri 15','Mon 18'];
+      const days=['11','12','13','14','15','18'];
       const grades=DB.GRADES;
       const data=grades.map((g,i)=>days.map((d,j)=>{
         const v=88+((i*3+j*5)%11); return v>98?98:v;
@@ -40,7 +40,7 @@ window.Pages=window.Pages||{};
             </div>
             <div class="divider"></div>
             ${UI.meterRow('Playgroup',93)}${UI.meterRow('Nursery',91)}${UI.meterRow('Grade R',92)}${UI.meterRow('Grade 1',91)}${UI.meterRow('Grade 2',90)}`)}
-          ${UI.card('Attendance heatmap','<div class="chart-box" style="overflow-x:auto">'+Charts.heatmap({rows:grades,cols:days,data})+'</div>',{sub:'Grade × school day · % present',right:UI.legend([{color:'#DCFCE7',label:'≤84%'},{color:'#4ADE80',label:'88–92%'},{color:'#15803D',label:'96%+'}])})}
+          ${UI.card('Attendance heatmap','<div class="chart-box" style="overflow-x:auto">'+Charts.heatmap({rows:grades,cols:days,data})+'</div>',{sub:'Grade × school day (May) · % present',right:UI.legend([{color:'#DCFCE7',label:'≤84%'},{color:'#4ADE80',label:'88–92%'},{color:'#15803D',label:'96%+'}])})}
         </div>
         <div class="card"><div class="card-head"><div><h3>Attendance by branch</h3></div></div>
           <div class="card-body" style="padding:0;padding-top:8px">${tbl}</div></div>
