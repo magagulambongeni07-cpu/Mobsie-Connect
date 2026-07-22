@@ -21,6 +21,31 @@ toggle RBAC permissions, download real CSV exports. Changes persist in your brow
 python3 -m http.server 8000   # optional — file:// works too
 ```
 
+## Backend API (full-stack mode)
+
+The repo now includes a real backend for the platform — the same one the
+Mobsie mobile app talks to:
+
+```bash
+cd server
+cp .env.example .env    # set your own secrets
+npm install
+npm start               # → http://localhost:4000
+```
+
+With the API running, the Control Centre auto-connects (look for the
+**"Connected to Mobsie API"** toast), loads live data from the server and syncs
+every change back — the web app and the mobile app share one source of truth.
+Node 18+ · Express · JWT auth with roles (staff + parents) · bcrypt passwords ·
+JSON-file store designed to be swapped for Postgres.
+
+- **`docs/HANDOVER.md`** — developer onboarding: run it, architecture, how to
+  link the mobile app, production checklist.
+- **`docs/API.md`** — full endpoint reference with curl examples: parent
+  endpoints (`/api/me/*`), public admission applications (`/api/apply`),
+  staff CRUD for every module, and domain actions (approve application,
+  mark invoice paid, restock, resolve ticket…).
+
 ## What's inside
 
 | Area | Pages |
