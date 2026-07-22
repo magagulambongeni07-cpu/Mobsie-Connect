@@ -4,6 +4,53 @@ window.Pages=window.Pages||{};
   const esc=UI.esc, F=DB.fmtN;
 
   /* ---------- Applications ---------- */
+  // Move an application through the pipeline, keeping donut + badges consistent
+  function setAppStatus(a,st){
+    const old=DB.APP_STATUS.indexOf(a.status), nw=DB.APP_STATUS.indexOf(st);
+    if(old>=0&&DB.appCounts[old]>0) DB.appCounts[old]--;
+    if(nw>=0) DB.appCounts[nw]++;
+    if(a.status==='Pending Review'&&st!=='Pending Review'&&DB.counters.pendingReview>0) DB.counters.pendingReview--;
+    a.status=st;
+  }
+
+  function scheduleInterviewModal(a,existing){
+    UI.modal({
+      title:existing?'Reschedule Interview':'Schedule Interview',
+      body:`
+        ${a?`<p class="small muted" style="margin-bottom:14px">For <b>${esc(a.child)}</b> · ${esc(a.grade)} · ${esc(a.school)}</p>`
+           :existing?'':`<div class="field"><label>Application</label><select data-f="app">${DB.applications.filter(x=>x.status==='Pending Review'||x.status==='Documents Required').map(x=>`<option value="${x.id}">${esc(x.child)} — ${esc(x.school)}</option>`).join('')}</select></div>`}
+        <div class="form-row">
+          <div class="field"><label>Date</label><input type="text" data-f="date" value="${existing?esc(existing.date):'May 25, 2026'}"></div>
+          <div class="field"><label>Time</label><input type="text" data-f="time" value="${existing?esc(existing.time):'09:00'}"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Mode</label><select data-f="mode"><option ${existing&&existing.mode==='In-person'?'selected':''}>In-person</option><option ${existing&&existing.mode==='Virtual'?'selected':''}>Virtual</option></select></div>
+          <div class="field"><label>Interviewer</label><input type="text" data-f="interviewer" value="${existing?esc(existing.interviewer):'Mpho Baloyi'}"></div>
+        </div>`,
+      foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" data-s>${existing?'Save New Time':'Schedule & Notify Parent'}</button>`,
+      mount(r,close){
+        r.querySelector('[data-x]').addEventListener('click',close);
+        r.querySelector('[data-s]').addEventListener('click',()=>{
+          const v=UI.formVals(r);
+          if(existing){
+            Object.assign(existing,{date:v.date,time:v.time,mode:v.mode,interviewer:v.interviewer,status:'Scheduled'});
+            UI.toast('Interview rescheduled — parent notified');
+          }else{
+            const app=a||DB.applications.find(x=>x.id===v.app);
+            if(!app){UI.toast('Pick an application first','alert');return;}
+            DB.interviews.unshift({id:'INT-'+(200+DB.interviews.length+1),child:app.child,parent:app.parent,
+              school:app.school,branch:app.branch,grade:app.grade,date:v.date,time:v.time,
+              interviewer:v.interviewer||'Mpho Baloyi',mode:v.mode,status:'Scheduled'});
+            setAppStatus(app,'Interview Scheduled');
+            DB.log('Scheduled interview',app.child+' — '+v.date,'ok');
+            UI.toast('Interview scheduled — invite sent to '+app.parent);
+          }
+          close();App.refresh();
+        });
+      }
+    });
+  }
+
   function openApplication(a){
     UI.drawer({
       title:'Application '+a.id,
@@ -28,11 +75,21 @@ window.Pages=window.Pages||{};
           <div class="feed-item"><span class="f-ic t-blue">${MCIcon('file')}</span><div class="f-txt"><div class="f-main">${a.docs} documents uploaded</div><div class="f-sub">Birth certificate, immunisation card…</div></div></div>
           <div class="feed-item"><span class="f-ic t-amber">${MCIcon('waiting')}</span><div class="f-txt"><div class="f-main">Awaiting admissions review</div><div class="f-sub">Assigned to Mpho Baloyi</div></div></div>
         </div>`,
-      foot:`<button class="btn btn-danger">${MCIcon('x')} Reject</button>
-            <button class="btn btn-ghost">${MCIcon('interviews')} Schedule Interview</button>
+      foot:`<button class="btn btn-danger" id="apReject">${MCIcon('x')} Reject</button>
+            <button class="btn btn-ghost" id="apInterview">${MCIcon('interviews')} Schedule Interview</button>
             <button class="btn btn-green" id="apApprove">${MCIcon('check')} Approve</button>`,
       mount(root,close){
-        root.querySelector('#apApprove').addEventListener('click',()=>{close();UI.toast('Application approved — welcome pack sent to '+a.parent);});
+        root.querySelector('#apApprove').addEventListener('click',()=>{
+          setAppStatus(a,'Approved');
+          DB.log('Approved application',a.id+' — '+a.child,'ok');
+          close();UI.toast('Application approved — welcome pack sent to '+a.parent);App.refresh();
+        });
+        root.querySelector('#apReject').addEventListener('click',()=>{
+          setAppStatus(a,'Rejected');
+          DB.log('Rejected application',a.id+' — '+a.child,'warn');
+          close();UI.toast('Application rejected — outcome letter sent');App.refresh();
+        });
+        root.querySelector('#apInterview').addEventListener('click',()=>{close();scheduleInterviewModal(a);});
       }
     });
   }
@@ -45,7 +102,7 @@ window.Pages=window.Pages||{};
       {label:'Docs complete',value:total-DB.appCounts[1]},
       {label:'Interviewed',value:DB.appCounts[2]+DB.appCounts[3]+DB.appCounts[4]},
       {label:'Approved',value:DB.appCounts[3]},
-      {label:'Enrolled',value:16},
+      {label:'Enrolled',value:Math.max(1,DB.appCounts[3]-1)},
     ];
     const rows=App.scoped(DB.applications).filter(r=>aState.tab==='All'||r.status===aState.tab);
     const tbl=UI.table({
@@ -66,7 +123,7 @@ window.Pages=window.Pages||{};
     const counts={All:DB.applications.length};
     tabs.slice(1).forEach(t=>counts[t]=DB.applications.filter(a=>a.status===t).length);
     return `
-      ${UI.pageHead('Applications','Every admission application across the platform, from first click to enrolment.',
+      ${UI.pageHead('Applications','Every admission application across your campuses, from first click to enrolment.',
         `<button class="btn btn-ghost">${MCIcon('download')} Export</button>
          <button class="btn btn-primary" id="newApp">${MCIcon('plus')} New Application</button>`)}
       <div class="grid" style="grid-template-columns:1.3fr 1fr 1fr;margin-bottom:20px" id="admTop">
@@ -79,12 +136,12 @@ window.Pages=window.Pages||{};
             <div class="mini-stat"><span class="ms-ic t-teal">${MCIcon('interviews')}</span><div><div class="ms-val">${DB.appCounts[2]}</div><div class="ms-lbl">Interviews set</div></div></div>
           </div>
           <div class="divider"></div>
-          <div class="small muted">Average time to decision <b style="color:var(--ink-900)">3.2 days</b> · fastest school <b style="color:var(--ink-900)">Little Stars (0.9 d)</b></div>`)}
-        ${UI.card('Top intake schools',`<div class="rank-list">${DB.schools.slice(0,4).map((s,i)=>`
+          <div class="small muted">Average time to decision <b style="color:var(--ink-900)">3.2 days</b> · fastest campus <b style="color:var(--ink-900)">Cosmo City (0.9 d)</b></div>`)}
+        ${UI.card('Intake by campus',`<div class="rank-list">${DB.liveBranches().map((b,i)=>`
           <div class="rank-item"><span class="rk">${i+1}</span>
-          <span class="r-txt"><div class="r-nm">${esc(s.name)}</div><div class="r-sub">${esc(s.city)}</div></span>
-          <span class="meter orange" style="flex:1"><i style="width:${90-i*16}%"></i></span>
-          <span class="r-val">${44-i*9}</span></div>`).join('')}</div>`,{sub:'Applications this month'})}
+          <span class="r-txt"><div class="r-nm">${esc(b.name)}</div><div class="r-sub">${esc(b.city)}</div></span>
+          <span class="meter orange" style="flex:1"><i style="width:${88-i*14}%"></i></span>
+          <span class="r-val">${12-i*2}</span></div>`).join('')}</div>`,{sub:'Applications this month'})}
       </div>
       <div class="card">
         <div class="card-body" style="padding-bottom:0">
@@ -102,18 +159,30 @@ window.Pages=window.Pages||{};
       if(na) na.addEventListener('click',()=>UI.modal({
         title:'New Application',
         body:`<div class="form-row">
-            <div class="field"><label>Child's name</label><input type="text" placeholder="Full name"></div>
-            <div class="field"><label>Grade applying for</label><select>${DB.GRADES.map(g=>`<option>${g}</option>`).join('')}</select></div>
+            <div class="field"><label>Child's name</label><input type="text" data-f="child" placeholder="Full name"></div>
+            <div class="field"><label>Grade applying for</label><select data-f="grade">${DB.GRADES.map(g=>`<option>${g}</option>`).join('')}</select></div>
           </div>
-          <div class="field"><label>Parent / guardian</label><input type="text" placeholder="Full name"></div>
+          <div class="field"><label>Parent / guardian</label><input type="text" data-f="parent" placeholder="Full name"></div>
           <div class="form-row">
-            <div class="field"><label>School</label><select>${DB.schools.slice(0,15).map(s=>`<option>${esc(s.name)}</option>`).join('')}</select></div>
-            <div class="field"><label>Preferred branch</label><select><option>Main branch</option></select></div>
+            <div class="field"><label>School</label><select data-f="school">${DB.schools.slice(0,15).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select></div>
+            <div class="field"><label>Preferred branch</label><input type="text" data-f="branch" placeholder="Main branch"></div>
           </div>`,
         foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" data-s>Submit Application</button>`,
         mount(r,close){
           r.querySelector('[data-x]').addEventListener('click',close);
-          r.querySelector('[data-s]').addEventListener('click',()=>{close();UI.toast('Application captured — parent notified in the app');});
+          r.querySelector('[data-s]').addEventListener('click',()=>{
+            const v=UI.formVals(r);
+            if(!v.child||!v.parent){UI.toast('Child and parent names are required','alert');return;}
+            const s=DB.schools.find(x=>x.id===v.school)||DB.schools[0];
+            DB.applications.unshift({id:'APP-'+(1076+DB.applications.length),child:v.child,parent:v.parent,
+              email:DB.email(v.parent),phone:DB.phone(),school:s.name,schoolId:s.id,
+              branch:v.branch||(s.city+' Branch'),grade:v.grade,status:'Pending Review',
+              date:'May 18, 2026',docs:0});
+            DB.appCounts[0]++;DB.counters.pendingReview++;
+            aState.tab='All';
+            DB.log('Captured application',v.child+' — '+s.name,'ok');
+            close();UI.toast('Application captured — parent notified in the app');App.refresh();
+          });
         }
       }));
     }
@@ -133,7 +202,15 @@ window.Pages=window.Pages||{};
           <div class="muted small">${esc(iv.grade)} · ${esc(iv.school)}</div></div>
           <span style="margin-left:auto">${UI.status(iv.status)}</span></div>
           ${UI.dl([['Parent',esc(iv.parent)],['Date',esc(iv.date)],['Time',iv.time],['Mode',esc(iv.mode)],['Interviewer',esc(iv.interviewer)],['Branch',esc(iv.branch)]])}`,
-        foot:`<button class="btn btn-ghost">${MCIcon('calendar')} Reschedule</button><button class="btn btn-green">${MCIcon('check')} Mark Completed</button>`,
+        foot:`<button class="btn btn-ghost" id="ivRes">${MCIcon('calendar')} Reschedule</button><button class="btn btn-green" id="ivDone">${MCIcon('check')} Mark Completed</button>`,
+        mount(root,close){
+          root.querySelector('#ivRes').addEventListener('click',()=>{close();scheduleInterviewModal(null,iv);});
+          root.querySelector('#ivDone').addEventListener('click',()=>{
+            iv.status='Completed';
+            DB.log('Completed interview',iv.id+' — '+iv.child,'ok');
+            close();UI.toast('Interview marked completed');App.refresh();
+          });
+        }
       }),
       columns:[
         {key:'id',label:'ID'},
@@ -147,7 +224,7 @@ window.Pages=window.Pages||{};
     });
     return `
       ${UI.pageHead('Interviews','Admission interviews across all schools and branches.',
-        `<button class="btn btn-primary">${MCIcon('plus')} Schedule Interview</button>`)}
+        `<button class="btn btn-primary" id="ivNew">${MCIcon('plus')} Schedule Interview</button>`)}
       <div class="grid cards-3" style="margin-bottom:20px">${today.map(iv=>`
         <div class="card" style="padding:16px 18px">
           <div style="display:flex;align-items:center;gap:12px">${UI.avatar(iv.child,'lg')}
@@ -164,7 +241,12 @@ window.Pages=window.Pages||{};
       <div class="card"><div class="card-head"><div><h3>All interviews</h3></div></div>
         <div class="card-body" style="padding:0;padding-top:8px">${tbl}</div></div>`;
   }
-  Pages.interviews={render:renderInterviews};
+  Pages.interviews={
+    render:renderInterviews,
+    mount(root){
+      root.querySelector('#ivNew').addEventListener('click',()=>scheduleInterviewModal(null));
+    }
+  };
 
   /* ---------- Waiting List ---------- */
   function renderWaiting(){
@@ -178,17 +260,17 @@ window.Pages=window.Pages||{};
         {key:'school',label:'School',render:r=>`<div>${esc(r.school)}</div><div class="cell-sub">${esc(r.branch)}</div>`},
         {key:'since',label:'On list since'},
         {key:'priority',label:'Priority',render:r=>UI.status(r.priority)},
-        {label:'',sortable:false,render:r=>`<button class="btn btn-soft btn-sm" data-offer="${r.id}">Offer place</button>`},
+        {label:'',sortable:false,render:r=>r.offered?UI.status('Offered'):`<button class="btn btn-soft btn-sm" data-offer="${r.id}">Offer place</button>`},
       ],
     });
     return `
       ${UI.pageHead('Waiting List','Families queued for a place, with sibling and staff priority handling.',
-        `<button class="btn btn-ghost">${MCIcon('campaigns')} Notify All</button>
-         <button class="btn btn-primary">${MCIcon('plus')} Add to List</button>`)}
+        `<button class="btn btn-ghost" id="wlNotify">${MCIcon('campaigns')} Notify All</button>
+         <button class="btn btn-primary" id="wlAdd">${MCIcon('plus')} Add to List</button>`)}
       <div class="grid cards-4" style="margin-bottom:20px">
-        ${UI.statCard({icon:'waiting',tint:'t-amber',label:'On Waiting List',value:F(DB.waitingList.length*31),deltaHtml:UI.delta(12,'up','this term')})}
-        ${UI.statCard({icon:'parents',tint:'t-purple',label:'Sibling Priority',value:'118',deltaHtml:`<span class="delta flat">24% of list</span>`})}
-        ${UI.statCard({icon:'check',tint:'t-green',label:'Placed This Month',value:'37',deltaHtml:UI.delta(9,'up','vs April')})}
+        ${UI.statCard({icon:'waiting',tint:'t-amber',label:'On Waiting List',value:F(DB.waitingList.length),deltaHtml:UI.delta(12,'up','this term')})}
+        ${UI.statCard({icon:'parents',tint:'t-purple',label:'Sibling Priority',value:F(DB.waitingList.filter(w=>w.priority==='Sibling').length),deltaHtml:`<span class="delta flat">of the list</span>`})}
+        ${UI.statCard({icon:'check',tint:'t-green',label:'Placed This Month',value:'9',deltaHtml:UI.delta(9,'up','vs April')})}
         ${UI.statCard({icon:'clock',tint:'t-blue',label:'Avg Wait Time',value:'6.4 wks',deltaHtml:UI.delta(4,'down','improving')})}
       </div>
       <div class="card"><div class="card-head"><div><h3>Current waiting list</h3><div class="sub">Ordered by position — offers release automatically when a seat opens</div></div></div>
@@ -198,8 +280,39 @@ window.Pages=window.Pages||{};
     render:renderWaiting,
     mount(root){
       root.addEventListener('click',e=>{
-        if(e.target.closest('[data-offer]')) UI.toast('Offer sent — family has 48 hours to accept');
+        const b=e.target.closest('[data-offer]');
+        if(b){
+          const w=DB.waitingList.find(x=>x.id===b.dataset.offer);
+          if(w){w.offered=true;DB.log('Offered place',w.child+' — '+w.school,'ok');
+            UI.toast('Offer sent — family has 48 hours to accept');App.refresh();}
+        }
       });
+      root.querySelector('#wlNotify').addEventListener('click',()=>UI.toast('Position update sent to all '+DB.waitingList.length+' families'));
+      root.querySelector('#wlAdd').addEventListener('click',()=>UI.modal({
+        title:'Add to Waiting List',
+        body:`<div class="form-row">
+            <div class="field"><label>Child's name</label><input type="text" data-f="child" placeholder="Full name"></div>
+            <div class="field"><label>Grade</label><select data-f="grade">${DB.GRADES.map(g=>`<option>${g}</option>`).join('')}</select></div>
+          </div>
+          <div class="field"><label>Parent / guardian</label><input type="text" data-f="parent" placeholder="Full name"></div>
+          <div class="form-row">
+            <div class="field"><label>School</label><select data-f="school">${DB.schools.slice(0,15).map(s=>`<option>${esc(s.name)}</option>`).join('')}</select></div>
+            <div class="field"><label>Priority</label><select data-f="priority"><option>Standard</option><option>Sibling</option><option>Staff Child</option></select></div>
+          </div>`,
+        foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" data-s>Add to List</button>`,
+        mount(r,close){
+          r.querySelector('[data-x]').addEventListener('click',close);
+          r.querySelector('[data-s]').addEventListener('click',()=>{
+            const v=UI.formVals(r);
+            if(!v.child){UI.toast('Child name is required','alert');return;}
+            DB.waitingList.push({id:'WL-'+(103+DB.waitingList.length),child:v.child,parent:v.parent||'—',
+              school:v.school,branch:'Main branch',grade:v.grade,position:DB.waitingList.length+1,
+              since:'May 18, 2026',priority:v.priority});
+            DB.log('Added to waiting list',v.child+' — '+v.school,'info');
+            close();UI.toast('Added to the waiting list at position '+DB.waitingList.length);App.refresh();
+          });
+        }
+      }));
     }
   };
 })();

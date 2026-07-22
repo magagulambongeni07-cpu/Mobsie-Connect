@@ -21,10 +21,31 @@ window.Pages=window.Pages||{};
               <div class="feed-item">${UI.avatar(t.by)}<div class="f-txt"><div class="f-main"><b>${esc(t.by)}</b> opened the ticket</div><div class="f-sub">“${esc(t.subject)}” · ${t.age} ago</div></div></div>
               ${t.agent!=='Unassigned'?`<div class="feed-item">${UI.avatar(t.agent)}<div class="f-txt"><div class="f-main"><b>${esc(t.agent)}</b> is investigating</div><div class="f-sub">Internal note added</div></div></div>`:''}
             </div>
-            <div class="field" style="margin-top:14px"><label>Reply</label><textarea placeholder="Type a reply to the school…"></textarea></div>`,
-          foot:`<button class="btn btn-ghost">${MCIcon('users')} Assign</button>
-                <button class="btn btn-green">${MCIcon('check')} Resolve</button>
-                <button class="btn btn-primary">${MCIcon('send')} Send Reply</button>`,
+            <div class="field" style="margin-top:14px"><label>Reply</label><textarea id="ticReply" placeholder="Type a reply…"></textarea></div>`,
+          foot:`<button class="btn btn-ghost" id="ticAssign">${MCIcon('users')} Assign</button>
+                <button class="btn btn-green" id="ticResolve">${MCIcon('check')} Resolve</button>
+                <button class="btn btn-primary" id="ticSend">${MCIcon('send')} Send Reply</button>`,
+          mount(root,close){
+            root.querySelector('#ticAssign').addEventListener('click',e=>{
+              UI.menu(e.currentTarget,['Katlego M.','Refilwe N.','Thandi Admin'].map(a=>({label:a,icon:'users',
+                checked:t.agent===a,onClick:()=>{t.agent=a;if(t.status==='Open')t.status='In Progress';
+                  DB.log('Assigned ticket',t.id+' → '+a,'info');
+                  UI.toast(t.id+' assigned to '+a);App.refresh();}})));
+            });
+            root.querySelector('#ticResolve').addEventListener('click',()=>{
+              t.status='Resolved';
+              DB.log('Resolved ticket',t.id+' — '+t.subject,'ok');
+              close();UI.toast(t.id+' resolved — '+t.by+' notified');App.refresh();
+            });
+            root.querySelector('#ticSend').addEventListener('click',()=>{
+              const txt=root.querySelector('#ticReply').value.trim();
+              if(!txt){UI.toast('Type a reply first','alert');return;}
+              if(t.status==='Open')t.status='In Progress';
+              if(t.agent==='Unassigned')t.agent='Thandi Admin';
+              DB.log('Replied to ticket',t.id,'info');
+              close();UI.toast('Reply sent on '+t.id);App.refresh();
+            });
+          }
         }),
         columns:[
           {key:'id',label:'Ticket'},
@@ -37,8 +58,8 @@ window.Pages=window.Pages||{};
         ],
       });
       return `
-        ${UI.pageHead('Support Tickets','Help requests from schools — SLA-tracked and assigned to your team.',
-          `<button class="btn btn-primary">${MCIcon('plus')} New Ticket</button>`)}
+        ${UI.pageHead('Support Tickets','Help requests from your campuses — SLA-tracked and assigned to your team.',
+          `<button class="btn btn-primary" id="ticNew">${MCIcon('plus')} New Ticket</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
           ${UI.statCard({icon:'support',tint:'t-orange',label:'Open',value:String(open),deltaHtml:`<span class="delta flat">2 urgent</span>`})}
           ${UI.statCard({icon:'refresh',tint:'t-blue',label:'In Progress',value:String(prog),deltaHtml:`<span class="delta flat">2 agents active</span>`})}
@@ -47,6 +68,28 @@ window.Pages=window.Pages||{};
         </div>
         <div class="card"><div class="card-head"><div><h3>Ticket queue</h3></div></div>
           <div class="card-body" style="padding:0;padding-top:8px">${tbl}</div></div>`;
+    },
+    mount(root){
+      root.querySelector('#ticNew').addEventListener('click',()=>UI.modal({
+        title:'New Ticket',
+        body:`<div class="field"><label>Subject</label><input type="text" data-f="subject" placeholder="What's the issue?"></div>
+          <div class="form-row">
+            <div class="field"><label>Campus</label><select data-f="school"><option>Head Office</option>${DB.liveBranches().map(b=>`<option>${esc(b.name)}</option>`).join('')}</select></div>
+            <div class="field"><label>Priority</label><select data-f="priority"><option>Normal</option><option>High</option><option>Urgent</option></select></div>
+          </div>`,
+        foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" data-s>Open Ticket</button>`,
+        mount(r,close){
+          r.querySelector('[data-x]').addEventListener('click',close);
+          r.querySelector('[data-s]').addEventListener('click',()=>{
+            const v=UI.formVals(r);
+            if(!v.subject){UI.toast('Describe the issue first','alert');return;}
+            DB.tickets.unshift({id:'TIC-'+(1209+DB.tickets.length-7),subject:v.subject,school:v.school,
+              by:'Thandi Admin',priority:v.priority,status:'Open',age:'now',agent:'Unassigned'});
+            DB.log('Opened ticket',v.subject,'info');
+            close();UI.toast('Ticket opened — support team notified');App.refresh();
+          });
+        }
+      }));
     }
   };
 
@@ -68,9 +111,9 @@ window.Pages=window.Pages||{};
         ${UI.pageHead('Users','Everyone with access to the Control Centre, scoped by role.',
           `<button class="btn btn-primary" id="invUser">${MCIcon('plus')} Invite User</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
-          ${UI.statCard({icon:'users',tint:'t-blue',label:'Platform Users',value:F(2833),deltaHtml:UI.delta(0,'up','this month').replace('0%','142')})}
-          ${UI.statCard({icon:'roles',tint:'t-orange',label:'Super Admins',value:'3',deltaHtml:`<span class="delta flat">2FA enforced</span>`})}
-          ${UI.statCard({icon:'school',tint:'t-purple',label:'School Owners',value:'128',deltaHtml:`<span class="delta flat">1 per school</span>`})}
+          ${UI.statCard({icon:'users',tint:'t-blue',label:'Staff Accounts',value:F(DB.totals.teachers+DB.adminUsers.length+3),deltaHtml:UI.delta(0,'up','this month').replace('0%','5')})}
+          ${UI.statCard({icon:'roles',tint:'t-orange',label:'Super Admins',value:'2',deltaHtml:`<span class="delta flat">2FA enforced</span>`})}
+          ${UI.statCard({icon:'branches',tint:'t-purple',label:'Campus Principals',value:String(DB.adminUsers.filter(u=>u.role==='Branch Principal').length),deltaHtml:`<span class="delta flat">1 per campus</span>`})}
           ${UI.statCard({icon:'lock',tint:'t-green',label:'2FA Enabled',value:'98%',deltaHtml:UI.delta(2,'up','vs April')})}
         </div>
         <div class="card"><div class="card-head"><div><h3>User accounts</h3></div><span class="spacer"></span>
@@ -81,25 +124,41 @@ window.Pages=window.Pages||{};
       root.querySelector('#uQ').addEventListener('input',e=>UI.tableFilter(UI.lastTableId(),e.target.value));
       root.addEventListener('click',e=>{
         const b=e.target.closest('[data-umenu]');
-        if(b) UI.menu(b,[
-          {icon:'edit',label:'Edit user',onClick:()=>UI.toast('Edit user')},
+        if(!b) return;
+        const u=DB.adminUsers.find(x=>x.email===b.dataset.umenu);
+        if(!u) return;
+        UI.menu(b,[
           {icon:'roles',label:'Change role',onClick:()=>App.go('roles')},
-          {icon:'refresh',label:'Reset password',onClick:()=>UI.toast('Password reset email sent')},
+          {icon:'refresh',label:'Reset password',onClick:()=>{
+            DB.log('Reset user password',u.email,'info');
+            UI.toast('Password reset email sent to '+u.email);
+          }},
           '-',
-          {icon:'pause',label:'Suspend access',danger:true,onClick:()=>UI.toast('User suspended')},
+          {icon:'pause',label:u.status==='Suspended'?'Restore access':'Suspend access',danger:u.status!=='Suspended',onClick:()=>{
+            u.status=u.status==='Suspended'?'Active':'Suspended';
+            DB.log((u.status==='Suspended'?'Suspended user':'Restored user'),u.email,'warn');
+            UI.toast(u.name+(u.status==='Suspended'?' suspended':' restored'));App.refresh();
+          }},
         ],{align:'right'});
       });
       root.querySelector('#invUser').addEventListener('click',()=>UI.modal({
         title:'Invite User',
-        body:`<div class="field"><label>Email address</label><input type="email" placeholder="name@school.co.za"></div>
+        body:`<div class="field"><label>Full name</label><input type="text" data-f="name" placeholder="Full name"></div>
+          <div class="field"><label>Email address</label><input type="email" data-f="email" placeholder="name@mobsie.co.za"></div>
           <div class="form-row">
-            <div class="field"><label>Role</label><select>${DB.rolePerms.roles.map(r=>`<option>${r.name}</option>`).join('')}</select></div>
-            <div class="field"><label>Scope</label><select><option>Entire platform</option><option>One school</option><option>One branch</option></select></div>
+            <div class="field"><label>Role</label><select data-f="role">${DB.rolePerms.roles.map(r=>`<option>${r.name}</option>`).join('')}</select></div>
+            <div class="field"><label>Scope</label><select data-f="scope"><option>Entire school group</option><option>All campuses</option>${DB.liveBranches().map(b=>`<option>${esc(b.name)}</option>`).join('')}</select></div>
           </div>`,
         foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" data-s>Send Invite</button>`,
         mount(r,close){
           r.querySelector('[data-x]').addEventListener('click',close);
-          r.querySelector('[data-s]').addEventListener('click',()=>{close();UI.toast('Invitation sent');});
+          r.querySelector('[data-s]').addEventListener('click',()=>{
+            const v=UI.formVals(r);
+            if(!v.name||!v.email){UI.toast('Name and email are required','alert');return;}
+            DB.adminUsers.push({name:v.name,email:v.email,role:v.role,scope:v.scope,last:'—',status:'Invited'});
+            DB.log('Invited user',v.email+' — '+v.role,'ok');
+            close();UI.toast('Invitation sent to '+v.email);App.refresh();
+          });
         }
       }));
     }
@@ -117,8 +176,8 @@ window.Pages=window.Pages||{};
           `<button class="btn btn-ghost">${MCIcon('copy')} Duplicate Role</button>
            <button class="btn btn-purple" id="newRole">${MCIcon('plus')} Create Custom Role</button>`)}
         <div class="grid cards-3" style="margin-bottom:20px">
-          ${UI.statCard({icon:'roles',tint:'t-purple',label:'Defined Roles',value:'6 + 2 custom',deltaHtml:`<span class="delta flat">RBAC enforced everywhere</span>`})}
-          ${UI.statCard({icon:'lock',tint:'t-orange',label:'Permission Checks / day',value:'2.4M',deltaHtml:`<span class="delta flat">avg 4ms overhead</span>`})}
+          ${UI.statCard({icon:'roles',tint:'t-purple',label:'Defined Roles',value:String(DB.rolePerms.roles.length),deltaHtml:`<span class="delta flat">RBAC enforced everywhere</span>`})}
+          ${UI.statCard({icon:'lock',tint:'t-orange',label:'Permission Checks / day',value:'184K',deltaHtml:`<span class="delta flat">avg 4ms overhead</span>`})}
           ${UI.statCard({icon:'audit',tint:'t-blue',label:'Changes This Month',value:'14',deltaHtml:`<span class="delta flat">all logged to audit trail</span>`})}
         </div>
         <div class="card"><div class="card-head"><div><h3>Permission matrix</h3><div class="sub">Every grant is scoped — a School Owner only ever sees their own school</div></div></div>
@@ -135,6 +194,8 @@ window.Pages=window.Pages||{};
         r.grants[pi]=r.grants[pi]?0:1;
         b.className='perm-dot '+(r.grants[pi]?'yes':'no');
         b.innerHTML=MCIcon(r.grants[pi]?'check':'x');
+        DB.log((r.grants[pi]?'Granted permission':'Revoked permission'),DB.rolePerms.perms[pi]+' — '+r.name,'warn');
+        DB.save();
         UI.toast(`${r.grants[pi]?'Granted':'Revoked'} “${DB.rolePerms.perms[pi]}” for ${r.name}`);
       });
       root.querySelector('#newRole').addEventListener('click',()=>UI.modal({
@@ -146,7 +207,14 @@ window.Pages=window.Pages||{};
         foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-purple" data-s>Create Role</button>`,
         mount(r,close){
           r.querySelector('[data-x]').addEventListener('click',close);
-          r.querySelector('[data-s]').addEventListener('click',()=>{close();UI.toast('Custom role created');});
+          r.querySelector('[data-s]').addEventListener('click',()=>{
+            const nm=r.querySelector('input').value.trim();
+            if(!nm){UI.toast('Name the role first','alert');return;}
+            const base=DB.rolePerms.roles.find(x=>x.name===r.querySelector('select').value)||DB.rolePerms.roles[2];
+            DB.rolePerms.roles.push({name:nm,color:'#0D9488',users:0,grants:[...base.grants]});
+            DB.log('Created custom role',nm,'warn');
+            close();UI.toast('Role "'+nm+'" created — fine-tune it in the matrix');App.refresh();
+          });
         }
       }));
     }
@@ -171,18 +239,23 @@ window.Pages=window.Pages||{};
       return `
         ${UI.pageHead('Audit Logs','Every sensitive action, recorded forever. POPIA-ready.',
           `<button class="select">${MCIcon('calendar')} Last 7 days ${MCIcon('chevDown')}</button>
-           <button class="btn btn-ghost">${MCIcon('download')} Export Log</button>`)}
+           <button class="btn btn-ghost" id="audExp">${MCIcon('download')} Export Log</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
-          ${UI.statCard({icon:'audit',tint:'t-blue',label:'Events (7 days)',value:F(48291),deltaHtml:`<span class="delta flat">all retained 7 years</span>`})}
-          ${UI.statCard({icon:'alert',tint:'t-amber',label:'Sensitive Actions',value:'126',deltaHtml:`<span class="delta flat">suspensions, role changes</span>`})}
-          ${UI.statCard({icon:'eye',tint:'t-purple',label:'Impersonations',value:'8',deltaHtml:`<span class="delta flat">all consented & logged</span>`})}
-          ${UI.statCard({icon:'lock',tint:'t-green',label:'Failed Logins',value:'42',deltaHtml:UI.delta(12,'down','vs last week')})}
+          ${UI.statCard({icon:'audit',tint:'t-blue',label:'Events (7 days)',value:F(2148),deltaHtml:`<span class="delta flat">all retained 7 years</span>`})}
+          ${UI.statCard({icon:'alert',tint:'t-amber',label:'Sensitive Actions',value:'23',deltaHtml:`<span class="delta flat">suspensions, role changes</span>`})}
+          ${UI.statCard({icon:'eye',tint:'t-purple',label:'Impersonations',value:'2',deltaHtml:`<span class="delta flat">all consented & logged</span>`})}
+          ${UI.statCard({icon:'lock',tint:'t-green',label:'Failed Logins',value:'7',deltaHtml:UI.delta(12,'down','vs last week')})}
         </div>
         <div class="card"><div class="card-head"><div><h3>Activity stream</h3></div><span class="spacer"></span>
           <div class="toolbar" style="margin:0"><div class="input-wrap" style="min-width:220px">${MCIcon('search')}<input id="aQ" placeholder="Search the log…"></div></div></div>
           <div class="card-body" style="padding:0;padding-top:8px">${tbl}</div></div>`;
     },
-    mount(root){ root.querySelector('#aQ').addEventListener('input',e=>UI.tableFilter(Pages.audit._tid,e.target.value)); }
+    mount(root){
+      root.querySelector('#aQ').addEventListener('input',e=>UI.tableFilter(Pages.audit._tid,e.target.value));
+      root.querySelector('#audExp').addEventListener('click',()=>UI.downloadCSV('mobsie-audit-log.csv',
+        ['When','Actor','Role','Action','Target'],
+        DB.auditLog.map(a=>[a.time,a.who,a.role,a.act,a.target])));
+    }
   };
 
   /* ---------- Settings (incl. white-label) ---------- */
@@ -204,29 +277,32 @@ window.Pages=window.Pages||{};
           <div class="form-row">
             <div class="field"><label>Default language</label><select><option>English</option><option>isiZulu</option><option>Sepedi</option><option>Afrikaans</option></select></div>
             <div class="field"><label>Academic year</label><select><option>Jan – Dec 2026</option></select></div>
-          </div>`),
+          </div>`)+
+        UI.card('Demo data',`
+          <p class="small muted" style="margin-bottom:12px">Everything you change in this preview — approvals, new campuses, payments, uploads — is saved in this browser. Reset to go back to the original demo data.</p>
+          <button class="btn btn-danger" id="resetData">${MCIcon('refresh')} Reset Demo Data</button>`,{cls:'',attrs:'style="margin-top:20px"'}),
         // White label
         `<div class="grid" style="grid-template-columns:1.4fr 1fr;gap:20px" id="wlWrap">
           ${UI.card('School branding',`
             <p class="small muted" style="margin-bottom:14px">Each school can customise its own look in the parent app, invoices, reports and certificates — while the Mobsie Connect platform identity stays consistent underneath.</p>
-            <div class="field"><label>School</label><select>${DB.schools.slice(0,10).map(s=>`<option>${esc(s.name)}</option>`).join('')}</select></div>
+            <div class="field"><label>Scope</label><select><option>${esc(DB.SCHOOL_NAME)} — all campuses</option>${DB.liveBranches().map(b=>`<option>${esc(b.name)}</option>`).join('')}</select></div>
             <div class="field"><label>Logo</label>
               <div style="display:flex;align-items:center;gap:14px">
-                <span class="school-logo" style="background:#F97316;width:56px;height:56px;border-radius:16px">LS</span>
+                <span class="school-logo" id="wlLogo" style="background:#F97316;width:56px;height:56px;border-radius:16px">${DB.initials(DB.SCHOOL_NAME)}</span>
                 <button class="btn btn-ghost btn-sm">${MCIcon('upload')} Upload new logo</button>
               </div></div>
             <div class="form-row">
               <div class="field"><label>Primary colour</label>
                 <div style="display:flex;gap:8px;padding:6px 0">
-                  <span class="color-dot on" style="background:#F97316"></span><span class="color-dot" style="background:#16A34A"></span>
-                  <span class="color-dot" style="background:#7C3AED"></span><span class="color-dot" style="background:#2563EB"></span>
-                  <span class="color-dot" style="background:#DB2777"></span><span class="color-dot" style="background:#0D9488"></span>
+                  <span class="color-dot on" data-wl="p" style="background:#F97316"></span><span class="color-dot" data-wl="p" style="background:#16A34A"></span>
+                  <span class="color-dot" data-wl="p" style="background:#7C3AED"></span><span class="color-dot" data-wl="p" style="background:#2563EB"></span>
+                  <span class="color-dot" data-wl="p" style="background:#DB2777"></span><span class="color-dot" data-wl="p" style="background:#0D9488"></span>
                 </div></div>
               <div class="field"><label>Secondary colour</label>
                 <div style="display:flex;gap:8px;padding:6px 0">
-                  <span class="color-dot" style="background:#F97316"></span><span class="color-dot on" style="background:#16A34A"></span>
-                  <span class="color-dot" style="background:#7C3AED"></span><span class="color-dot" style="background:#2563EB"></span>
-                  <span class="color-dot" style="background:#FBBF24"></span><span class="color-dot" style="background:#94A3B8"></span>
+                  <span class="color-dot" data-wl="s" style="background:#F97316"></span><span class="color-dot on" data-wl="s" style="background:#16A34A"></span>
+                  <span class="color-dot" data-wl="s" style="background:#7C3AED"></span><span class="color-dot" data-wl="s" style="background:#2563EB"></span>
+                  <span class="color-dot" data-wl="s" style="background:#FBBF24"></span><span class="color-dot" data-wl="s" style="background:#94A3B8"></span>
                 </div></div>
             </div>
             <div class="toggle-row"><span class="t-txt"><span class="t-nm">Branded email headers</span><span class="t-sub">School logo and colours on every email</span></span><button class="toggle on" data-tg></button></div>
@@ -235,18 +311,18 @@ window.Pages=window.Pages||{};
             <div class="toggle-row"><span class="t-txt"><span class="t-nm">Custom app splash screen</span><span class="t-sub">Enterprise plan only</span></span><button class="toggle" data-tg></button></div>`)}
           ${UI.card('Live preview',`
             <div style="border:1px solid var(--line);border-radius:18px;overflow:hidden">
-              <div style="background:linear-gradient(120deg,#F97316,#FB923C);padding:18px;color:#fff">
+              <div id="wlHead" style="background:linear-gradient(120deg,#F97316,#F9731688);padding:18px;color:#fff">
                 <div style="display:flex;align-items:center;gap:10px">
-                  <span class="school-logo" style="background:rgba(255,255,255,.25);width:38px;height:38px;border-radius:12px;font-size:13px">LS</span>
-                  <div><div style="font-weight:800">Little Stars Academy</div><div style="font-size:11.5px;opacity:.9">Powered by Mobsie Connect</div></div>
+                  <span class="school-logo" style="background:rgba(255,255,255,.25);width:38px;height:38px;border-radius:12px;font-size:13px">${DB.initials(DB.SCHOOL_NAME)}</span>
+                  <div><div style="font-weight:800">${esc(DB.SCHOOL_NAME)}</div><div style="font-size:11.5px;opacity:.9">Powered by Mobsie Connect</div></div>
                 </div></div>
               <div style="padding:16px">
                 <div style="font-weight:700;color:var(--ink-900);margin-bottom:8px">Invoice INV-000880</div>
                 <div class="small muted">Monthly Fees — May</div>
                 <div style="font-size:22px;font-weight:800;color:var(--ink-900);margin:6px 0 12px">R2,350.00</div>
-                <button class="btn btn-primary btn-sm btn-block">Pay in App</button>
+                <button class="btn btn-sm btn-block" id="wlBtn" style="background:#16A34A;color:#fff">Pay in App</button>
               </div></div>
-            <p class="small muted" style="margin-top:12px">Preview updates as the school changes branding.</p>`)}
+            <p class="small muted" style="margin-top:12px">Preview updates live as you change the branding.</p>`)}
         </div><style>@media(max-width:1100px){#wlWrap{grid-template-columns:1fr}}</style>`,
         // Billing
         UI.card('Plans & billing',`
@@ -304,9 +380,29 @@ window.Pages=window.Pages||{};
         const tg=e.target.closest('[data-tg]');
         if(tg){ tg.classList.toggle('on'); }
         const cd=e.target.closest('.color-dot');
-        if(cd){ cd.parentElement.querySelectorAll('.color-dot').forEach(x=>x.classList.remove('on')); cd.classList.add('on'); UI.toast('Brand colour updated — preview refreshed'); }
+        if(cd){
+          cd.parentElement.querySelectorAll('.color-dot').forEach(x=>x.classList.remove('on'));
+          cd.classList.add('on');
+          const col=cd.style.background;
+          const head=document.getElementById('wlHead');
+          const btn=document.getElementById('wlBtn');
+          const logo=document.getElementById('wlLogo');
+          if(cd.dataset.wl==='p'&&head){ head.style.background=`linear-gradient(120deg,${col},${col}cc)`; if(logo) logo.style.background=col; }
+          if(cd.dataset.wl==='s'&&btn){ btn.style.background=col; }
+          UI.toast('Brand colour updated — preview refreshed');
+        }
       });
-      root.querySelector('#saveSet').addEventListener('click',()=>UI.toast('Settings saved'));
+      root.querySelector('#saveSet').addEventListener('click',()=>{DB.save();UI.toast('Settings saved');});
+      const rd=root.querySelector('#resetData');
+      if(rd) rd.addEventListener('click',()=>UI.modal({
+        title:'Reset demo data?',
+        body:`<p>All your changes in this preview — approvals, new campuses, payments, uploads — will be cleared and the original demo data restored.</p>`,
+        foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-danger" data-s>${MCIcon('refresh')} Reset Everything</button>`,
+        mount(r,close){
+          r.querySelector('[data-x]').addEventListener('click',close);
+          r.querySelector('[data-s]').addEventListener('click',()=>{close();DB.reset();});
+        }
+      }));
     }
   };
 })();

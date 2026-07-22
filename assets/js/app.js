@@ -6,10 +6,10 @@
   const NAV=[
     {items:[{route:'dashboard',label:'Dashboard',icon:'dashboard',accent:true}]},
     {section:'Platform',items:[
-      {route:'schools',label:'Schools',icon:'school'},
+      {route:'schools',label:'Our School',icon:'school'},
       {route:'branches',label:'Branches',icon:'branches'}]},
     {section:'Admissions',items:[
-      {route:'applications',label:'Applications',icon:'applications',badge:24},
+      {route:'applications',label:'Applications',icon:'applications',badge:()=>DB.counters.pendingReview},
       {route:'interviews',label:'Interviews',icon:'interviews'},
       {route:'waiting-list',label:'Waiting List',icon:'waiting'}]},
     {section:'Students',items:[
@@ -27,7 +27,7 @@
       {route:'statements',label:'Statements',icon:'statements'},
       {route:'discounts',label:'Discounts',icon:'discounts'}]},
     {section:'Communications',items:[
-      {route:'messages',label:'Messages',icon:'messages',badge:8},
+      {route:'messages',label:'Messages',icon:'messages',badge:()=>DB.conversations.reduce((a,c)=>a+c.unread,0)},
       {route:'newsletters',label:'Newsletters',icon:'newsletters'},
       {route:'push',label:'Push Notifications',icon:'push'},
       {route:'sms',label:'SMS',icon:'sms'},
@@ -57,7 +57,7 @@
     go(r){ location.hash='#/'+r; },
     school(){ return this.ctx.school?DB.schools.find(s=>s.id===this.ctx.school):null; },
     branchObj(){ return this.ctx.branch?DB.branches.find(b=>b.id===this.ctx.branch):null; },
-    scopeLabel(){ const s=this.school(); return s?s.name:'All Schools'; },
+    scopeLabel(){ const s=this.school(); return s?s.name:(DB.schools.length===1?DB.schools[0].name:'All Schools'); },
     // Filter helper — rows carrying schoolId / school name fields
     scoped(rows){
       const s=this.school(); if(!s) return rows;
@@ -79,11 +79,13 @@
       <div class="side-logo">${LOGO}<div><div class="name">Mobsie Connect</div><div class="sub">Control Centre</div></div></div>
       <nav class="side-nav">${NAV.map(g=>
         (g.section?`<div class="side-section">${esc(g.section)}</div>`:'')+
-        g.items.map(it=>`
+        g.items.map(it=>{
+          const b=typeof it.badge==='function'?it.badge():it.badge;
+          return `
           <a class="side-item ${App.route===it.route?'active':''}" href="#/${it.route}" data-route="${it.route}">
             ${MCIcon(it.icon)}<span>${esc(it.label)}</span>
-            ${it.badge?`<span class="side-badge">${it.badge}</span>`:(it.accent&&App.route===it.route?MCIcon('chevDown','chev'):'')}
-          </a>`).join('')
+            ${b?`<span class="side-badge">${b}</span>`:(it.accent&&App.route===it.route?MCIcon('chevDown','chev'):'')}
+          </a>`;}).join('')
       ).join('')}</nav>
       <div class="side-foot"><div class="help-pill" id="helpPill"><span class="q">?</span> Help Centre</div></div>`;
     $('#helpPill').addEventListener('click',()=>UI.toast('Help Centre opens in a new tab in the full build','info'));
@@ -96,11 +98,11 @@
 
   /* ---- Topbar ---- */
   const NOTIFS=[
-    {icon:'applications',tint:'t-orange',t:'24 applications awaiting review',s:'Admissions · today'},
-    {icon:'alert',tint:'t-red',t:'Payment failed — Rainbow Bridge Academy',s:'Billing · 32m ago'},
-    {icon:'support',tint:'t-purple',t:'2 urgent support tickets open',s:'Support · 1h ago'},
-    {icon:'school',tint:'t-green',t:'New school onboarded: Dinaledi Educare',s:'Platform · 3h ago'},
-    {icon:'server',tint:'t-blue',t:'Nightly backup completed in 4m 12s',s:'System · 02:00'},
+    {icon:'applications',tint:'t-orange',t:'Applications awaiting review',s:'Admissions · today',go:'applications'},
+    {icon:'alert',tint:'t-red',t:'Payment failed — Rainbow Bridge Academy',s:'Billing · 32m ago',go:'payments'},
+    {icon:'support',tint:'t-purple',t:'2 urgent support tickets open',s:'Support · 1h ago',go:'support'},
+    {icon:'school',tint:'t-green',t:'New school onboarded: Dinaledi Educare',s:'Platform · 3h ago',go:'schools'},
+    {icon:'server',tint:'t-blue',t:'Nightly backup completed in 4m 12s',s:'System · 02:00',go:'audit'},
   ];
   function renderTopbar(){
     const tb=$('#topbar');
@@ -114,7 +116,7 @@
         <button class="tb-select" id="selSchool"><span class="ic orange">${MCIcon('school')}</span>${esc(App.scopeLabel())} ${MCIcon('chevDown','chev')}</button>
         <button class="tb-select" id="selBranch"><span class="ic green">${MCIcon('branches')}</span>${esc(br?br.name:'All Branches')} ${MCIcon('chevDown','chev')}</button>
         <button class="tb-icon" id="tbBell">${MCIcon('bell')}<span class="dot">12</span></button>
-        <button class="tb-icon" id="tbChat">${MCIcon('chat')}<span class="dot orange">9</span></button>
+        <button class="tb-icon" id="tbChat">${MCIcon('chat')}${(u=>u?`<span class="dot orange">${u}</span>`:'')(DB.conversations.reduce((a,c)=>a+c.unread,0))}</button>
         <div class="tb-user" id="tbUser">${UI.avatar('Thandi Admin')}
           <div class="who"><div class="nm">Thandi Admin</div><div class="rl">Super Admin</div></div>${MCIcon('chevDown','chev')}</div>
       </div>`;
@@ -123,7 +125,7 @@
     $('#selSchool').addEventListener('click',e=>schoolMenu(e.currentTarget));
     $('#selBranch').addEventListener('click',e=>branchMenu(e.currentTarget));
     $('#tbBell').addEventListener('click',e=>{
-      UI.menu(e.currentTarget,NOTIFS.map(n=>({icon:n.icon,label:n.t,onClick:()=>{}})),{head:'Notifications',align:'right'});
+      UI.menu(e.currentTarget,NOTIFS.map(n=>({icon:n.icon,label:n.t,onClick:()=>App.go(n.go)})),{head:'Notifications',align:'right'});
     });
     $('#tbChat').addEventListener('click',()=>App.go('messages'));
     $('#tbUser').addEventListener('click',e=>{
@@ -136,19 +138,16 @@
     });
   }
   function schoolMenu(anchor){
-    const items=[{label:'All Schools',icon:'grid',checked:!App.ctx.school,onClick:()=>{App.ctx.school=null;App.ctx.branch=null;rerender();}}]
-      .concat(DB.schools.slice(0,14).map(s=>({label:s.name,icon:'school',checked:App.ctx.school===s.id,
-        onClick:()=>{App.ctx.school=s.id;App.ctx.branch=null;rerender();UI.toast('Now viewing '+s.name);}})));
-    UI.menu(anchor,items,{head:'Jump into a school',align:'right',scroll:true});
+    const items=DB.schools.map(s=>({label:s.name,icon:'school',checked:true,onClick:()=>{}}))
+      .concat([{label:'View school profile',icon:'external',onClick:()=>App.go('schools')}]);
+    UI.menu(anchor,items,{head:'Your school',align:'right'});
   }
   function branchMenu(anchor){
-    const s=App.school();
-    if(!s){ UI.menu(anchor,[{label:'Select a school first',icon:'info',onClick:()=>{}}],{head:'Branches',align:'right'}); return; }
-    const brs=DB.branches.filter(b=>b.schoolId===s.id);
+    const brs=DB.liveBranches();
     const items=[{label:'All Branches',icon:'grid',checked:!App.ctx.branch,onClick:()=>{App.ctx.branch=null;rerender();}}]
       .concat(brs.map(b=>({label:b.name,icon:'branches',checked:App.ctx.branch===b.id,
-        onClick:()=>{App.ctx.branch=b.id;rerender();}})));
-    UI.menu(anchor,items,{head:s.name,align:'right',scroll:true});
+        onClick:()=>{App.ctx.school=DB.schools[0].id;App.ctx.branch=b.id;rerender();UI.toast('Now viewing '+b.name);}})));
+    UI.menu(anchor,items,{head:DB.SCHOOL_NAME,align:'right',scroll:true});
   }
 
   function findNav(route){
@@ -162,9 +161,17 @@
     return h&&window.Pages[h]?h:'dashboard';
   }
   function rerender(){
+    renderSidebar();
+    markActive();
     renderTopbar();
     renderPage();
   }
+  // Re-render the current view after a data mutation, then persist it.
+  App.refresh=function(){
+    DB.recount();
+    rerender();
+    DB.save();
+  };
   function renderPage(){
     const page=window.Pages[App.route];
     const c=$('#content');
@@ -183,8 +190,8 @@
   /* ---- Global search (⌘K) ---- */
   function searchIndex(){
     const ix=[];
-    DB.schools.slice(0,40).forEach(s=>ix.push({kind:'School',icon:'school',tint:'t-orange',nm:s.name,sub:s.city+' · '+s.branches+' branches',route:'schools'}));
-    DB.branches.slice(0,40).forEach(b=>ix.push({kind:'Branch',icon:'branches',tint:'t-green',nm:b.name,sub:b.school,route:'branches'}));
+    DB.schools.forEach(s=>ix.push({kind:'School',icon:'school',tint:'t-orange',nm:s.name,sub:s.city,route:'schools'}));
+    DB.branches.forEach(b=>ix.push({kind:'Campus',icon:'branches',tint:'t-green',nm:b.name,sub:b.city+' · '+b.status,route:'branches'}));
     DB.teachers.forEach(t=>ix.push({kind:'Teacher',icon:'teachers',tint:'t-purple',nm:t.name,sub:t.school+' · '+t.cls,route:'teachers'}));
     DB.parents.forEach(p=>ix.push({kind:'Parent',icon:'parents',tint:'t-blue',nm:p.name,sub:p.school,route:'parents'}));
     DB.learners.forEach(l=>ix.push({kind:'Learner',icon:'learners',tint:'t-teal',nm:l.name,sub:l.school+' · '+l.grade,route:'learners'}));

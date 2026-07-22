@@ -57,27 +57,48 @@ window.Pages=window.Pages||{};
       root.querySelector('#chatSend').addEventListener('click',send);
       root.querySelector('#chatInput').addEventListener('keydown',e=>{if(e.key==='Enter')send();});
       const box=root.querySelector('#chatMsgs'); box.scrollTop=box.scrollHeight;
-      root.querySelector('#newMsg').addEventListener('click',()=>composeModal('Message'));
+      root.querySelector('#newMsg').addEventListener('click',()=>composeModal('Message',v=>{
+        const p=DB.parents.find(x=>x.name!==DB.conversations[0].who)||DB.parents[0];
+        DB.conversations.unshift({id:'c-'+Date.now(),who:p.name,school:DB.SCHOOL_NAME,branch:p.branch,
+          unread:0,time:'now',msgs:[{dir:'out',text:v.subject+(v.body?' — '+v.body:''),time:'now'}],
+          preview:v.subject});
+        mState.active=0;
+      }));
     }
   };
 
   function audienceFields(){
     return `<div class="field"><label>Send to</label>
-      <select><option>Entire Platform</option><option>Specific School</option><option>Specific Branch</option><option>Specific Grade</option><option>Specific Class</option><option>Specific Parents</option><option>Specific Teachers</option></select></div>`;
+      <select data-f="aud"><option>All campuses</option>${DB.liveBranches().map(b=>`<option>${esc(b.name)}</option>`).join('')}<option>Specific grade</option><option>Specific class</option><option>Specific parents</option><option>All teachers</option></select></div>`;
   }
-  function composeModal(kind){
+  // Rough audience size for realistic delivery numbers
+  function audSize(aud){
+    if(aud==='All campuses') return DB.totals.parents;
+    const b=DB.branches.find(x=>x.name===aud);
+    if(b) return Math.round(b.students*0.78);
+    return aud==='All teachers'?DB.totals.teachers:DB.ri(40,160);
+  }
+  function composeModal(kind,onSend){
     UI.modal({
       title:'New '+kind,
       body:`${audienceFields()}
-        <div class="field"><label>${kind==='SMS'?'Message (160 chars)':'Subject'}</label><input type="text" placeholder="${kind==='SMS'?'Type your SMS…':'Subject line'}"></div>
-        ${kind!=='SMS'?`<div class="field"><label>Message</label><textarea placeholder="Write your ${kind.toLowerCase()}…"></textarea></div>`:''}`,
+        <div class="field"><label>${kind==='SMS'?'Message (160 chars)':'Subject'}</label><input type="text" data-f="subject" placeholder="${kind==='SMS'?'Type your SMS…':'Subject line'}"></div>
+        ${kind!=='SMS'?`<div class="field"><label>Message</label><textarea data-f="body" placeholder="Write your ${kind.toLowerCase()}…"></textarea></div>`:''}`,
       foot:`<button class="btn btn-ghost" data-x>Cancel</button>
             <button class="btn btn-ghost" data-d>${MCIcon('file')} Save Draft</button>
             <button class="btn btn-primary" data-s>${MCIcon('send')} Send</button>`,
       mount(r,close){
         r.querySelector('[data-x]').addEventListener('click',close);
         r.querySelector('[data-d]').addEventListener('click',()=>{close();UI.toast(kind+' saved to drafts');});
-        r.querySelector('[data-s]').addEventListener('click',()=>{close();UI.toast(kind+' queued for delivery 🎉');});
+        r.querySelector('[data-s]').addEventListener('click',()=>{
+          const v=UI.formVals(r);
+          if(!v.subject){UI.toast('Write something first','alert');return;}
+          close();
+          if(onSend) onSend(v);
+          DB.log('Sent '+kind.toLowerCase(),v.subject+' → '+v.aud,'ok');
+          UI.toast(kind+' sent to '+v.aud+' 🎉');
+          App.refresh();
+        });
       }
     });
   }
@@ -100,15 +121,20 @@ window.Pages=window.Pages||{};
         ${UI.pageHead('Newsletters','Beautiful branded newsletters delivered to the app and inbox.',
           `<button class="btn btn-purple" id="newNl">${MCIcon('plus')} Compose Newsletter</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
-          ${UI.statCard({icon:'newsletters',tint:'t-purple',label:'Sent This Term',value:'42',deltaHtml:UI.delta(8,'up','vs last term')})}
-          ${UI.statCard({icon:'eye',tint:'t-blue',label:'Avg Open Rate',value:'67%',deltaHtml:UI.delta(3.1,'up','vs last term')})}
+          ${UI.statCard({icon:'newsletters',tint:'t-purple',label:'Sent This Term',value:String(DB.newsletters.filter(n=>n.status==='Sent').length+9),deltaHtml:UI.delta(8,'up','vs last term')})}
+          ${UI.statCard({icon:'eye',tint:'t-blue',label:'Avg Open Rate',value:'71%',deltaHtml:UI.delta(3.1,'up','vs last term')})}
           ${UI.statCard({icon:'parents',tint:'t-green',label:'Subscribers',value:F(DB.totals.parents),deltaHtml:`<span class="delta flat">auto-synced with parents</span>`})}
-          ${UI.statCard({icon:'star',tint:'t-amber',label:'Best Performer',value:'81%',deltaHtml:`<span class="delta flat">Sports Day — Hebron</span>`})}
+          ${UI.statCard({icon:'star',tint:'t-amber',label:'Best Performer',value:'84%',deltaHtml:`<span class="delta flat">Sports Day — Soshanguve</span>`})}
         </div>
         <div class="card"><div class="card-head"><div><h3>All newsletters</h3></div></div>
           <div class="card-body" style="padding:0;padding-top:8px">${tbl}</div></div>`;
     },
-    mount(root){ root.querySelector('#newNl').addEventListener('click',()=>composeModal('Newsletter')); }
+    mount(root){
+      root.querySelector('#newNl').addEventListener('click',()=>composeModal('Newsletter',v=>{
+        DB.newsletters.unshift({title:v.subject,audience:v.aud,sent:'Just now',
+          recipients:audSize(v.aud),openRate:0,status:'Sent'});
+      }));
+    }
   };
 
   /* ---------- Push notifications ---------- */
@@ -128,15 +154,21 @@ window.Pages=window.Pages||{};
         ${UI.pageHead('Push Notifications','Instant alerts straight to parents\' phones.',
           `<button class="btn btn-primary" id="newPush">${MCIcon('push')} Send Push</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
-          ${UI.statCard({icon:'push',tint:'t-orange',label:'Sent This Month',value:F(214),deltaHtml:UI.delta(12,'up','vs April')})}
-          ${UI.statCard({icon:'check',tint:'t-green',label:'Delivery Rate',value:'99.2%',deltaHtml:`<span class="delta flat">18.5K devices</span>`})}
-          ${UI.statCard({icon:'eye',tint:'t-purple',label:'Avg Open Rate',value:'71%',deltaHtml:UI.delta(2.4,'up','vs April')})}
-          ${UI.statCard({icon:'zap',tint:'t-blue',label:'Avg Delivery Time',value:'1.8s',deltaHtml:`<span class="delta flat">platform-wide</span>`})}
+          ${UI.statCard({icon:'push',tint:'t-orange',label:'Sent This Month',value:F(DB.pushLog.length+81),deltaHtml:UI.delta(12,'up','vs April')})}
+          ${UI.statCard({icon:'check',tint:'t-green',label:'Delivery Rate',value:'99.2%',deltaHtml:`<span class="delta flat">812 devices</span>`})}
+          ${UI.statCard({icon:'eye',tint:'t-purple',label:'Avg Open Rate',value:'74%',deltaHtml:UI.delta(2.4,'up','vs April')})}
+          ${UI.statCard({icon:'zap',tint:'t-blue',label:'Avg Delivery Time',value:'1.8s',deltaHtml:`<span class="delta flat">across campuses</span>`})}
         </div>
         <div class="card"><div class="card-head"><div><h3>Recent notifications</h3></div></div>
           <div class="card-body" style="padding:0;padding-top:8px">${tbl}</div></div>`;
     },
-    mount(root){ root.querySelector('#newPush').addEventListener('click',()=>composeModal('Push Notification')); }
+    mount(root){
+      root.querySelector('#newPush').addEventListener('click',()=>composeModal('Push Notification',v=>{
+        const n=audSize(v.aud);
+        DB.pushLog.unshift({title:v.subject,audience:v.aud,time:'Just now',
+          delivered:n,opened:Math.round(n*0.15),status:'Delivered'});
+      }));
+    }
   };
 
   /* ---------- SMS ---------- */
@@ -157,17 +189,30 @@ window.Pages=window.Pages||{};
           `<button class="btn btn-ghost" id="buyCred">${MCIcon('plus')} Buy Credits</button>
            <button class="btn btn-primary" id="newSms">${MCIcon('sms')} Send SMS</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
-          ${UI.statCard({icon:'sms',tint:'t-blue',label:'Credits Remaining',value:F(48210),deltaHtml:`<span class="delta flat">≈ 2.5 platform sends</span>`})}
-          ${UI.statCard({icon:'send',tint:'t-orange',label:'Sent This Month',value:F(12904),deltaHtml:UI.delta(4,'down','app adoption rising')})}
+          ${UI.statCard({icon:'sms',tint:'t-blue',label:'Credits Remaining',value:F(4820),deltaHtml:`<span class="delta flat">≈ 6 full-school sends</span>`})}
+          ${UI.statCard({icon:'send',tint:'t-orange',label:'Sent This Month',value:F(DB.smsLog.reduce((a,s)=>a+s.count,0)+180),deltaHtml:UI.delta(4,'down','app adoption rising')})}
           ${UI.statCard({icon:'check',tint:'t-green',label:'Delivery Rate',value:'98.7%',deltaHtml:`<span class="delta flat">1 carrier degraded</span>`})}
-          ${UI.statCard({icon:'wallet',tint:'t-purple',label:'Cost This Month',value:'R3,871',deltaHtml:`<span class="delta flat">R0.30 / message</span>`})}
+          ${UI.statCard({icon:'wallet',tint:'t-purple',label:'Cost This Month',value:'R184',deltaHtml:`<span class="delta flat">R0.30 / message</span>`})}
         </div>
         <div class="card"><div class="card-head"><div><h3>SMS log</h3></div></div>
           <div class="card-body" style="padding:0;padding-top:8px">${tbl}</div></div>`;
     },
     mount(root){
-      root.querySelector('#newSms').addEventListener('click',()=>composeModal('SMS'));
-      root.querySelector('#buyCred').addEventListener('click',()=>UI.toast('Credit top-up flow opens billing'));
+      root.querySelector('#newSms').addEventListener('click',()=>composeModal('SMS',v=>{
+        DB.smsLog.unshift({to:v.aud,msg:v.subject,time:'Just now',count:audSize(v.aud),status:'Delivered'});
+      }));
+      root.querySelector('#buyCred').addEventListener('click',()=>UI.modal({
+        title:'Buy SMS Credits',
+        body:`<div class="field"><label>Bundle</label><select data-f="bundle"><option>1,000 credits — R300</option><option>5,000 credits — R1,400</option><option>10,000 credits — R2,600</option></select></div>
+          <p class="small muted">Charged to the school's card on file. Credits never expire.</p>`,
+        foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-green" data-s>Purchase</button>`,
+        mount(r,close){
+          r.querySelector('[data-x]').addEventListener('click',close);
+          r.querySelector('[data-s]').addEventListener('click',()=>{
+            close();UI.toast('Credits added to your balance 🎉');
+          });
+        }
+      }));
     }
   };
 
@@ -201,7 +246,12 @@ window.Pages=window.Pages||{};
           <div class="card-body" style="padding:0;padding-top:8px">${tbl}</div></div>
         <style>@media(max-width:1100px){#campTop{grid-template-columns:1fr}}</style>`;
     },
-    mount(root){ root.querySelector('#newCamp').addEventListener('click',()=>composeModal('Campaign')); }
+    mount(root){
+      root.querySelector('#newCamp').addEventListener('click',()=>composeModal('Campaign',v=>{
+        DB.campaigns.unshift({name:v.subject,subject:v.subject,audience:v.aud,
+          sent:audSize(v.aud),openRate:0,clickRate:0,status:'Running'});
+      }));
+    }
   };
 
   /* ---------- Feedback Centre ---------- */
@@ -213,7 +263,7 @@ window.Pages=window.Pages||{};
           `<button class="select">${MCIcon('filter')} All topics ${MCIcon('chevDown')}</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
           ${UI.statCard({icon:'heart',tint:'t-pink',label:'CSAT Score',value:'4.6/5',deltaHtml:UI.delta(0.2,'up','vs last term').replace('0.2%','0.2')})}
-          ${UI.statCard({icon:'feedback',tint:'t-orange',label:'New This Week',value:'86',deltaHtml:`<span class="delta flat">9 need response</span>`})}
+          ${UI.statCard({icon:'feedback',tint:'t-orange',label:'New This Week',value:String(DB.feedback.filter(f=>f.status==='New').length+10),deltaHtml:`<span class="delta flat">${DB.feedback.filter(f=>f.status==='New').length} need response</span>`})}
           ${UI.statCard({icon:'clock',tint:'t-blue',label:'Avg Response Time',value:'4.2h',deltaHtml:UI.delta(12,'down','improving')})}
           ${UI.statCard({icon:'trendUp',tint:'t-green',label:'NPS',value:'+62',deltaHtml:`<span class="delta flat">world-class</span>`})}
         </div>
@@ -238,7 +288,23 @@ window.Pages=window.Pages||{};
     mount(root){
       root.addEventListener('click',e=>{
         const b=e.target.closest('[data-reply]');
-        if(b) UI.toast('Reply sent to the family via the app');
+        if(!b) return;
+        const f=DB.feedback.find(x=>x.id===b.dataset.reply);
+        if(!f) return;
+        UI.modal({
+          title:'Reply to '+f.who,
+          body:`<p class="small muted" style="margin-bottom:12px">“${esc(f.text)}”</p>
+            <div class="field"><label>Your reply</label><textarea data-f="reply" placeholder="Thank the family and respond…"></textarea></div>`,
+          foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" data-s>${MCIcon('send')} Send Reply</button>`,
+          mount(r,close){
+            r.querySelector('[data-x]').addEventListener('click',close);
+            r.querySelector('[data-s]').addEventListener('click',()=>{
+              f.status='Responded';
+              DB.log('Replied to feedback',f.id+' — '+f.who,'ok');
+              close();UI.toast('Reply sent to '+f.who+' via the app');App.refresh();
+            });
+          }
+        });
       });
     }
   };

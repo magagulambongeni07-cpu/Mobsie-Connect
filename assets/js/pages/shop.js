@@ -19,10 +19,10 @@ window.Pages=window.Pages||{};
         ${UI.pageHead('Products','School shop catalogue — uniforms, stationery and more, sold in the parent app.',
           `<button class="btn btn-primary" id="addProd">${MCIcon('plus')} Add Product</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
-          ${UI.statCard({icon:'products',tint:'t-orange',label:'Active Products',value:'186',deltaHtml:`<span class="delta flat">across 128 school shops</span>`})}
-          ${UI.statCard({icon:'orders',tint:'t-green',label:'Shop Revenue',value:'R284,600',deltaHtml:UI.delta(14,'up','this month')})}
-          ${UI.statCard({icon:'trendUp',tint:'t-purple',label:'Best Seller',value:'Golf Shirt',deltaHtml:`<span class="delta flat">518 sold</span>`})}
-          ${UI.statCard({icon:'alert',tint:'t-red',label:'Stock Alerts',value:'7',deltaHtml:`<span class="delta flat">2 out of stock</span>`})}
+          ${UI.statCard({icon:'products',tint:'t-orange',label:'Active Products',value:String(DB.products.filter(p=>p.status!=='Hidden').length+16),deltaHtml:`<span class="delta flat">across 5 campus shops</span>`})}
+          ${UI.statCard({icon:'orders',tint:'t-green',label:'Shop Revenue',value:'R86,400',deltaHtml:UI.delta(14,'up','this month')})}
+          ${UI.statCard({icon:'trendUp',tint:'t-purple',label:'Best Seller',value:'Golf Shirt',deltaHtml:`<span class="delta flat">218 sold</span>`})}
+          ${UI.statCard({icon:'alert',tint:'t-red',label:'Stock Alerts',value:String(DB.products.filter(p=>p.stock<20).length),deltaHtml:`<span class="delta flat">${DB.products.filter(p=>p.stock===0).length} out of stock</span>`})}
         </div>
         <div class="grid cards-4">${DB.products.map((p,i)=>`
           <div class="card" style="overflow:hidden">
@@ -45,25 +45,56 @@ window.Pages=window.Pages||{};
     mount(root){
       root.addEventListener('click',e=>{
         const b=e.target.closest('[data-pmenu]');
-        if(b) UI.menu(b,[
-          {icon:'edit',label:'Edit product',onClick:()=>UI.toast('Edit product')},
+        if(!b) return;
+        const p=DB.products[+b.dataset.pmenu];
+        UI.menu(b,[
+          {icon:'edit',label:'Edit product',onClick:()=>UI.modal({
+            title:'Edit Product',
+            body:`<div class="field"><label>Name</label><input type="text" data-f="name" value="${esc(p.name)}"></div>
+              <div class="form-row">
+                <div class="field"><label>Price (R)</label><input type="number" data-f="price" value="${p.price}"></div>
+                <div class="field"><label>Category</label><select data-f="cat">${['Uniform','Stationery','Accessories','Books'].map(c=>`<option ${p.cat===c?'selected':''}>${c}</option>`).join('')}</select></div>
+              </div>`,
+            foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" data-s>Save</button>`,
+            mount(r,close){
+              r.querySelector('[data-x]').addEventListener('click',close);
+              r.querySelector('[data-s]').addEventListener('click',()=>{
+                const v=UI.formVals(r);
+                Object.assign(p,{name:v.name||p.name,price:Math.round(+v.price)||p.price,cat:v.cat});
+                close();UI.toast('Product updated');App.refresh();
+              });
+            }
+          })},
           {icon:'inventory',label:'Adjust stock',onClick:()=>App.go('inventory')},
-          {icon:'pause',label:'Hide from shop',onClick:()=>UI.toast('Product hidden')},
+          {icon:'pause',label:p.status==='Hidden'?'Show in shop':'Hide from shop',onClick:()=>{
+            p.status=p.status==='Hidden'?(p.stock===0?'Out of Stock':p.stock<20?'Low Stock':'Active'):'Hidden';
+            UI.toast(p.status==='Hidden'?p.name+' hidden from the shop':p.name+' is live again');
+            App.refresh();
+          }},
         ],{align:'right'});
       });
       root.querySelector('#addProd').addEventListener('click',()=>UI.modal({
         title:'Add Product',
         body:`<div class="form-row">
-            <div class="field"><label>Product name</label><input type="text" placeholder="e.g. Summer Hat"></div>
-            <div class="field"><label>Category</label><select><option>Uniform</option><option>Stationery</option><option>Accessories</option><option>Books</option></select></div></div>
+            <div class="field"><label>Product name</label><input type="text" data-f="name" placeholder="e.g. Summer Hat"></div>
+            <div class="field"><label>Category</label><select data-f="cat"><option>Uniform</option><option>Stationery</option><option>Accessories</option><option>Books</option></select></div></div>
           <div class="form-row">
-            <div class="field"><label>Price (R)</label><input type="number" placeholder="0.00"></div>
-            <div class="field"><label>Initial stock</label><input type="number" placeholder="0"></div></div>
-          <div class="field"><label>Available in</label><select><option>All school shops</option><option>Selected schools</option></select></div>`,
+            <div class="field"><label>Price (R)</label><input type="number" data-f="price" placeholder="0.00"></div>
+            <div class="field"><label>Initial stock</label><input type="number" data-f="stock" placeholder="0"></div></div>
+          <div class="field"><label>Available in</label><select data-f="avail"><option>All campus shops</option><option>Selected campuses</option></select></div>`,
         foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" data-s>Add Product</button>`,
         mount(r,close){
           r.querySelector('[data-x]').addEventListener('click',close);
-          r.querySelector('[data-s]').addEventListener('click',()=>{close();UI.toast('Product live in the parent app shop');});
+          r.querySelector('[data-s]').addEventListener('click',()=>{
+            const v=UI.formVals(r);
+            if(!v.name){UI.toast('Name the product first','alert');return;}
+            const hues=['#F97316','#16A34A','#7C3AED','#2563EB','#0D9488','#DB2777'];
+            const stock=Math.round(+v.stock)||0;
+            DB.products.unshift({name:v.name,cat:v.cat,price:Math.round(+v.price)||100,stock,sold:0,
+              status:stock===0?'Out of Stock':stock<20?'Low Stock':'Active',hue:hues[v.name.length%hues.length]});
+            DB.log('Added product',v.name,'ok');
+            close();UI.toast(v.name+' is live in the parent app shop');App.refresh();
+          });
         }
       }));
     }
@@ -86,7 +117,25 @@ window.Pages=window.Pages||{};
               <div class="feed-item"><span class="f-ic t-blue">${MCIcon('products')}</span><div class="f-txt"><div class="f-main">Being prepared</div><div class="f-sub">School shop team</div></div></div>
               <div class="feed-item"><span class="f-ic t-amber">${MCIcon('push')}</span><div class="f-txt"><div class="f-main">Parent notified when ready</div><div class="f-sub">Automatic push notification</div></div></div>
             </div>`,
-          foot:`<button class="btn btn-ghost">${MCIcon('printer')} Packing Slip</button><button class="btn btn-green">${MCIcon('check')} Mark Ready</button>`,
+          foot:`<button class="btn btn-ghost" id="ordSlip">${MCIcon('printer')} Packing Slip</button>
+                ${o.status==='Processing'?`<button class="btn btn-green" id="ordReady">${MCIcon('check')} Mark Ready</button>`
+                 :o.status==='Ready for Collection'?`<button class="btn btn-green" id="ordDone">${MCIcon('check')} Mark Collected</button>`:''}`,
+          mount(root,close){
+            root.querySelector('#ordSlip').addEventListener('click',()=>UI.downloadCSV('packing-slip-'+o.id+'.csv',
+              ['Order','Customer','Campus','Items','Total (R)','Placed'],
+              [[o.id,o.parent,o.school,o.items,o.total,o.date]]));
+            const rd=root.querySelector('#ordReady');
+            if(rd) rd.addEventListener('click',()=>{
+              o.status='Ready for Collection';
+              DB.log('Order ready',o.id+' — '+o.parent,'ok');
+              close();UI.toast(o.parent+' notified — order ready for collection');App.refresh();
+            });
+            const dn=root.querySelector('#ordDone');
+            if(dn) dn.addEventListener('click',()=>{
+              o.status='Collected';
+              close();UI.toast(o.id+' marked collected');App.refresh();
+            });
+          }
         }),
         columns:[
           {key:'id',label:'Order'},
@@ -102,10 +151,10 @@ window.Pages=window.Pages||{};
         ${UI.pageHead('Orders','Shop orders paid in-app, collected at school.',
           `<button class="btn btn-ghost">${MCIcon('download')} Export</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
-          ${UI.statCard({icon:'orders',tint:'t-green',label:'Orders This Month',value:F(1240),deltaHtml:UI.delta(14,'up','vs April')})}
-          ${UI.statCard({icon:'waiting',tint:'t-amber',label:'Awaiting Collection',value:'86',deltaHtml:`<span class="delta flat">parents notified</span>`})}
+          ${UI.statCard({icon:'orders',tint:'t-green',label:'Orders This Month',value:F(412),deltaHtml:UI.delta(14,'up','vs April')})}
+          ${UI.statCard({icon:'waiting',tint:'t-amber',label:'Awaiting Collection',value:String(DB.ordersList.filter(o=>o.status==='Ready for Collection').length+15),deltaHtml:`<span class="delta flat">parents notified</span>`})}
           ${UI.statCard({icon:'wallet',tint:'t-purple',label:'Avg Order Value',value:'R229',deltaHtml:UI.delta(3,'up','vs April')})}
-          ${UI.statCard({icon:'refresh',tint:'t-blue',label:'Refund Rate',value:'0.8%',deltaHtml:`<span class="delta flat">12 refunds</span>`})}
+          ${UI.statCard({icon:'refresh',tint:'t-blue',label:'Refund Rate',value:'0.8%',deltaHtml:`<span class="delta flat">4 refunds</span>`})}
         </div>
         <div class="card"><div class="card-head"><div><h3>Recent orders</h3></div><span class="spacer"></span>
           <div class="toolbar" style="margin:0"><div class="input-wrap" style="min-width:220px">${MCIcon('search')}<input id="oQ" placeholder="Search orders…"></div></div></div>
@@ -139,10 +188,10 @@ window.Pages=window.Pages||{};
           `<button class="btn btn-ghost">${MCIcon('download')} Stock Report</button>
            <button class="btn btn-primary">${MCIcon('plus')} Receive Stock</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
-          ${UI.statCard({icon:'inventory',tint:'t-blue',label:'SKUs Tracked',value:'186',deltaHtml:`<span class="delta flat">128 school shops</span>`})}
-          ${UI.statCard({icon:'wallet',tint:'t-green',label:'Stock Value',value:'R1.2M',deltaHtml:`<span class="delta flat">at retail price</span>`})}
-          ${UI.statCard({icon:'alert',tint:'t-amber',label:'Low Stock',value:'5',deltaHtml:`<span class="delta flat">reorder suggested</span>`})}
-          ${UI.statCard({icon:'x',tint:'t-red',label:'Out of Stock',value:'2',deltaHtml:`<span class="delta flat">orders paused</span>`})}
+          ${UI.statCard({icon:'inventory',tint:'t-blue',label:'SKUs Tracked',value:String(DB.products.length+16),deltaHtml:`<span class="delta flat">5 campus shops</span>`})}
+          ${UI.statCard({icon:'wallet',tint:'t-green',label:'Stock Value',value:DB.fmtRk(DB.products.reduce((a,p)=>a+p.stock*p.price,0)),deltaHtml:`<span class="delta flat">at retail price</span>`})}
+          ${UI.statCard({icon:'alert',tint:'t-amber',label:'Low Stock',value:String(DB.products.filter(p=>p.stock>0&&p.stock<20).length),deltaHtml:`<span class="delta flat">reorder suggested</span>`})}
+          ${UI.statCard({icon:'x',tint:'t-red',label:'Out of Stock',value:String(DB.products.filter(p=>p.stock===0).length),deltaHtml:`<span class="delta flat">orders paused</span>`})}
         </div>
         <div class="card"><div class="card-head"><div><h3>Stock levels</h3></div></div>
           <div class="card-body" style="padding:0;padding-top:8px">${tbl}</div></div>`;
@@ -150,7 +199,14 @@ window.Pages=window.Pages||{};
     mount(root){
       root.addEventListener('click',e=>{
         const b=e.target.closest('[data-restock]');
-        if(b) UI.toast('Purchase order raised for '+b.dataset.restock);
+        if(!b) return;
+        const p=DB.products.find(x=>x.name===b.dataset.restock);
+        if(p){
+          p.stock+=50;
+          p.status=p.stock<20?'Low Stock':(p.status==='Hidden'?'Hidden':'Active');
+          DB.log('Restocked product',p.name+' (+50 units)','ok');
+          UI.toast('50 units of '+p.name+' received into stock');App.refresh();
+        }
       });
     }
   };

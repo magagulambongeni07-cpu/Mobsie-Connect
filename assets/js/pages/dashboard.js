@@ -6,16 +6,17 @@ window.Pages=window.Pages||{};
   function render(){
     const t=DB.totals;
     const appTotal=DB.appCounts.reduce((a,b)=>a+b,0);
-    const scope=App.school();
-    const hello=scope?`Viewing <b>${UI.esc(scope.name)}</b> — here's how this school is doing.`:`Here's what's happening across your platform today.`;
+    const br=App.branchObj();
+    const coming=DB.branches.filter(b=>b.status==='Coming Soon').length;
+    const hello=br?`Viewing <b>${UI.esc(br.name)}</b> — here's how this campus is doing.`:`Here's what's happening across your ${t.branches} campuses today.`;
 
     const stats=[
-      {icon:'school',tint:'t-orange',label:'Schools',value:F(t.schools),delta:null,deltaHtml:UI.delta(6,'up','this month').replace('6%','6')},
-      {icon:'branches',tint:'t-green',label:'Branches',value:F(t.branches),deltaHtml:UI.delta(14,'up','this month').replace('14%','14')},
-      {icon:'learners',tint:'t-purple',label:'Students',value:F(t.students),deltaHtml:UI.delta(0,'up','this month').replace('0%','1,257')},
-      {icon:'parents',tint:'t-blue',label:'Parents',value:F(t.parents),deltaHtml:UI.delta(0,'up','this month').replace('0%','968')},
-      {icon:'teachers',tint:'t-teal',label:'Teachers',value:F(t.teachers),deltaHtml:UI.delta(0,'up','this month').replace('0%','120')},
-      {icon:'applications',tint:'t-amber',label:'New Applications',value:F(appTotal),deltaHtml:`<span class="delta up">${MCIcon('trendUp')}24 <span class="vs">pending review</span></span>`},
+      {icon:'branches',tint:'t-green',label:'Campuses',value:F(t.branches),deltaHtml:`<span class="delta up">${MCIcon('trendUp')}${coming} <span class="vs">opening soon</span></span>`},
+      {icon:'learners',tint:'t-purple',label:'Learners',value:F(t.students),deltaHtml:UI.delta(0,'up','this month').replace('0%','42')},
+      {icon:'parents',tint:'t-blue',label:'Parents',value:F(t.parents),deltaHtml:UI.delta(0,'up','this month').replace('0%','31')},
+      {icon:'teachers',tint:'t-teal',label:'Teachers',value:F(t.teachers),deltaHtml:UI.delta(0,'up','this month').replace('0%','4')},
+      {icon:'applications',tint:'t-amber',label:'New Applications',value:F(appTotal),deltaHtml:`<span class="delta up">${MCIcon('trendUp')}${DB.counters.pendingReview} <span class="vs">pending review</span></span>`},
+      {icon:'attendance',tint:'t-orange',label:'Avg Attendance',value:'92%',deltaHtml:UI.delta(4.3,'up','vs last month')},
     ];
 
     const rs=DB.revSeries;
@@ -25,15 +26,15 @@ window.Pages=window.Pages||{};
     // build overview body manually for KPI row + chart
     const overviewBody=`
       <div class="kpi-row">
-        <div class="kpi"><div class="k-lbl">Revenue</div><div class="k-val">R2,450,800</div>${UI.delta(12.5,'up','vs last month')}</div>
-        <div class="kpi"><div class="k-lbl">MRR</div><div class="k-val">${DB.fmtR(t.mrr)}</div>${UI.delta(9.3,'up','vs last month')}</div>
-        <div class="kpi"><div class="k-lbl">Outstanding Fees</div><div class="k-val">R320,450</div>${UI.delta(4.2,'up','vs last month')}</div>
-        <div class="kpi"><div class="k-lbl">Active Users</div><div class="k-val">32,456</div>${UI.delta(8.7,'up','vs last month')}</div>
+        <div class="kpi"><div class="k-lbl">Fees Collected</div><div class="k-val">${DB.fmtR(t.mrr)}</div>${UI.delta(9.7,'up','vs last month')}</div>
+        <div class="kpi"><div class="k-lbl">Outstanding Fees</div><div class="k-val">R84,300</div>${UI.delta(4.2,'down','improving')}</div>
+        <div class="kpi"><div class="k-lbl">Collection Rate</div><div class="k-val">91%</div>${UI.delta(2.1,'up','vs last month')}</div>
+        <div class="kpi"><div class="k-lbl">Active App Users</div><div class="k-val">812</div>${UI.delta(8.7,'up','vs last month')}</div>
       </div>
-      ${UI.legend([{color:'#EA580C',label:'Revenue',line:true},{color:'#16A34A',label:'MRR',line:true}])}
+      ${UI.legend([{color:'#EA580C',label:'This month (cumulative)',line:true},{color:'#16A34A',label:'Last month',line:true}])}
       <div class="chart-box" style="margin-top:8px">${Charts.line({labels:rs.labels,series:[
-        {name:'Revenue',color:'#EA580C',data:rs.revenue},
-        {name:'MRR',color:'#16A34A',data:rs.mrr,area:false},
+        {name:'This month',color:'#EA580C',data:rs.revenue},
+        {name:'Last month',color:'#16A34A',data:rs.mrr,area:false},
       ],height:252})}</div>`;
 
     const appSegs=[
@@ -63,11 +64,11 @@ window.Pages=window.Pages||{};
       <div class="feed-item"><span class="f-ic ${a.tint}">${MCIcon(a.icon)}</span>
       <div class="f-txt"><div class="f-main">${a.main}</div><div class="f-sub">${a.sub}</div></div></div>`).join('')}</div>`;
 
-    const topBody=`<div class="rank-list">${DB.schools.slice(0,5).map((s,i)=>`
+    const topBody=`<div class="rank-list">${[...DB.liveBranches()].sort((a,b)=>b.attendance-a.attendance).map((b,i)=>`
       <div class="rank-item"><span class="rk">${i+1}</span>
-        <span class="r-txt"><div class="r-nm">${UI.esc(s.name)}</div><div class="r-sub">${UI.esc(s.city)}</div></span>
-        <span class="meter" style="flex:1"><i style="width:${s.perf}%"></i></span>
-        <span class="r-val">${s.perf}%</span></div>`).join('')}</div>`;
+        <span class="r-txt"><div class="r-nm">${UI.esc(b.name)}</div><div class="r-sub">${UI.esc(b.city)}</div></span>
+        <span class="meter" style="flex:1"><i style="width:${b.attendance}%"></i></span>
+        <span class="r-val">${b.attendance}%</span></div>`).join('')}</div>`;
 
     const evBody=`<div>${DB.events.map(e=>`
       <div class="event-item"><span class="ev-date ${e.tint}"><span class="mo">${e.mo}</span><span class="dy">${e.dy}</span></span>
@@ -80,30 +81,34 @@ window.Pages=window.Pages||{};
       <div class="health-row"><span class="h-dot ok"></span><span class="h-nm">Parent Mobile App</span><span class="h-val">99.95% uptime</span></div>
       <div class="health-row"><span class="h-dot ok"></span><span class="h-nm">Payment Gateway</span><span class="h-val">142 ms avg</span></div>
       <div class="health-row"><span class="h-dot warn"></span><span class="h-nm">SMS Delivery</span><span class="h-val">Degraded — 1 carrier</span></div>
-      <div class="health-row"><span class="h-dot ok"></span><span class="h-nm">Database Backups</span><span class="h-val">Last: 02:00 · 4m 12s</span></div>
+      <div class="health-row"><span class="h-dot ok"></span><span class="h-nm">Database Backups</span><span class="h-val">Last: 02:00 · 1m 42s</span></div>
       <div class="divider"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="mini-stat"><span class="ms-ic t-purple">${MCIcon('download')}</span><div><div class="ms-val">86,420</div><div class="ms-lbl">App downloads</div></div></div>
-        <div class="mini-stat"><span class="ms-ic t-orange">${MCIcon('waiting')}</span><div><div class="ms-val">17</div><div class="ms-lbl">Pending approvals</div></div></div>
+        <div class="mini-stat"><span class="ms-ic t-purple">${MCIcon('download')}</span><div><div class="ms-val">1,240</div><div class="ms-lbl">App downloads</div></div></div>
+        <div class="mini-stat"><span class="ms-ic t-orange">${MCIcon('waiting')}</span><div><div class="ms-val">9</div><div class="ms-lbl">Pending approvals</div></div></div>
       </div>`;
 
     const gs=DB.growthSeries;
     const growthBody=`
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
-        ${UI.pills('growthPills',['Schools joined','Students'],0)}
+        ${UI.pills('growthPills',['Campuses','Learners'],0)}
         <span class="muted small" style="margin-left:auto">Last 6 months</span>
       </div>
-      <div class="chart-box" id="growthChart">${Charts.bars({labels:gs.labels,series:[{name:'Schools',color:'#EA580C',data:gs.schools}],height:220,capLabels:true})}</div>
+      <div class="chart-box" id="growthChart">${Charts.bars({labels:gs.labels,series:[{name:'Campuses',color:'#EA580C',data:gs.schools}],height:220,capLabels:true})}</div>
       <div class="divider"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="mini-stat"><span class="ms-ic t-green">${MCIcon('creditUp')}</span><div><div class="ms-val">${DB.fmtRk(t.mrr*12)}</div><div class="ms-lbl">ARR run-rate</div></div></div>
-        <div class="mini-stat"><span class="ms-ic t-blue">${MCIcon('heart')}</span><div><div class="ms-val">96.4%</div><div class="ms-lbl">Retention (12 mo)</div></div></div>
+        <div class="mini-stat"><span class="ms-ic t-green">${MCIcon('creditUp')}</span><div><div class="ms-val">${DB.fmtRk(t.mrr*12)}</div><div class="ms-lbl">Fees run-rate /yr</div></div></div>
+        <div class="mini-stat"><span class="ms-ic t-blue">${MCIcon('heart')}</span><div><div class="ms-val">96.4%</div><div class="ms-lbl">Family retention</div></div></div>
       </div>`;
 
-    const newest=`<div class="feed">${DB.schools.slice(-4).reverse().map(s=>`
-      <div class="feed-item"><span class="school-logo" style="width:36px;height:36px;border-radius:11px;font-size:12px;background:${s.color}">${s.initials}</span>
-      <div class="f-txt"><div class="f-main"><b>${UI.esc(s.name)}</b></div><div class="f-sub">${UI.esc(s.city)} · ${s.plan} plan · joined ${s.joined}</div></div>
-      <span style="margin-left:auto;align-self:center">${UI.status(s.status)}</span></div>`).join('')}</div>`;
+    const expansion=DB.branches.filter(b=>b.status==='Coming Soon');
+    const newest=`<div class="feed">${expansion.map(b=>`
+      <div class="feed-item"><span class="school-logo" style="width:36px;height:36px;border-radius:11px;font-size:12px;background:var(--ink-300)">${DB.initials(b.city)}</span>
+      <div class="f-txt"><div class="f-main"><b>${UI.esc(b.name)}</b></div><div class="f-sub">${UI.esc(b.city)} · ${UI.esc(b.region)} · ${UI.esc(b.since)}</div></div>
+      <span style="margin-left:auto;align-self:center">${UI.badge('Coming Soon','purple')}</span></div>`).join('')||
+      `<p class="small muted">No campuses in the pipeline right now.</p>`}
+      <div class="divider"></div>
+      <p class="small muted">Families in these areas can already join the waiting list — interest routes to the new campus automatically on opening day.</p>`;
 
     return `
       ${UI.pageHead('Welcome back, Thandi!',hello,`
@@ -111,19 +116,19 @@ window.Pages=window.Pages||{};
         <button class="btn btn-purple" data-menu="export">${MCIcon('download')} Export Report ${MCIcon('chevDown')}</button>`,'👋')}
       <div class="grid cards-6" style="margin-bottom:20px">${stats.map(UI.statCard).join('')}</div>
       <div class="grid" style="grid-template-columns:1.85fr 1fr 1fr;margin-bottom:20px" id="dashMid">
-        <div class="card">${'<div class="card-head"><div><h3>Platform Overview</h3></div><span class="spacer"></span><button class="select" data-menu="period">This Month '+MCIcon('chevDown')+'</button></div>'}<div class="card-body">${overviewBody}</div></div>
+        <div class="card">${'<div class="card-head"><div><h3>School Overview</h3></div><span class="spacer"></span><button class="select" data-menu="period">This Month '+MCIcon('chevDown')+'</button></div>'}<div class="card-body">${overviewBody}</div></div>
         ${UI.card('Application Status',appBody,{foot:`<button class="btn btn-ghost btn-block" data-go="applications">View All Applications</button>`})}
         ${UI.card('Attendance Overview',attBody,{right:`<button class="select" data-menu="period">This Month ${MCIcon('chevDown')}</button>`,foot:`<button class="btn btn-outline-purple btn-block" data-go="attendance">View Attendance Report</button>`})}
       </div>
       <div class="grid" style="grid-template-columns:1.15fr 1fr 1fr;margin-bottom:20px" id="dashLow">
         ${UI.card('Recent Activity',activityBody,{foot:`<button class="btn btn-ghost btn-block" data-go="audit">View All Activity</button>`})}
-        ${UI.card('Top Performing Schools',topBody,{right:`<button class="select" data-menu="period">This Month ${MCIcon('chevDown')}</button>`,foot:`<button class="btn btn-ghost btn-block" data-go="schools">View All Schools</button>`})}
+        ${UI.card('Top Performing Campuses',topBody,{right:`<button class="select" data-menu="period">This Month ${MCIcon('chevDown')}</button>`,foot:`<button class="btn btn-ghost btn-block" data-go="schools">View Our School</button>`})}
         ${UI.card('Upcoming Events',evBody,{right:`<button class="btn btn-ghost btn-sm" data-go="calendar">View Calendar</button>`})}
       </div>
       <div class="grid" style="grid-template-columns:1.15fr 1fr 1fr" id="dashFoot">
-        ${UI.card('Platform Growth',growthBody)}
+        ${UI.card('School Growth',growthBody)}
         ${UI.card('System Health',health,{right:UI.badge('All systems go','green')})}
-        ${UI.card('Newest Schools',newest,{foot:`<button class="btn btn-ghost btn-block" data-go="schools">Go to Schools</button>`})}
+        ${UI.card('Expansion Pipeline',newest,{foot:`<button class="btn btn-ghost btn-block" data-go="schools">View Expansion Plans</button>`})}
       </div>
       <style>
         @media (max-width:1280px){#dashMid,#dashLow,#dashFoot{grid-template-columns:1fr 1fr}}
@@ -142,7 +147,9 @@ window.Pages=window.Pages||{};
     root.querySelectorAll('[data-menu="export"]').forEach(b=>b.addEventListener('click',e=>{
       UI.menu(e.currentTarget,[
         {icon:'file',label:'Export as PDF',onClick:()=>UI.toast('Executive report exported as PDF')},
-        {icon:'reports',label:'Export as Excel',onClick:()=>UI.toast('Report exported as Excel')},
+        {icon:'reports',label:'Export as CSV',onClick:()=>UI.downloadCSV('mobsie-executive-summary.csv',
+          ['Campus','Learners','Teachers','Attendance %','Fees (R/mo)','Status'],
+          DB.branches.map(x=>[x.name,x.students,x.teachers,x.attendance,x.revenue,x.status]))},
         {icon:'copy',label:'Copy share link',onClick:()=>UI.toast('Share link copied to clipboard')},
       ],{align:'right'});
     }));
@@ -150,8 +157,8 @@ window.Pages=window.Pages||{};
     UI.bindPills('growthPills',i=>{
       const el=document.getElementById('growthChart');
       el.innerHTML=i===0
-        ?Charts.bars({labels:gs.labels,series:[{name:'Schools',color:'#EA580C',data:gs.schools}],height:220,capLabels:true})
-        :Charts.bars({labels:gs.labels,series:[{name:'Students',color:'#7C3AED',data:gs.students}],height:220,capLabels:true});
+        ?Charts.bars({labels:gs.labels,series:[{name:'Campuses',color:'#EA580C',data:gs.schools}],height:220,capLabels:true})
+        :Charts.bars({labels:gs.labels,series:[{name:'Learners',color:'#7C3AED',data:gs.students}],height:220,capLabels:true});
     });
   }
 

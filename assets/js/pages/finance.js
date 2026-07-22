@@ -16,7 +16,18 @@ window.Pages=window.Pages||{};
             <div style="display:flex;gap:8px;margin-bottom:18px">${UI.status(p.status)} ${UI.badge(p.method,'blue')}</div>
             <div style="font-size:30px;font-weight:800;color:var(--ink-900);letter-spacing:-.02em;margin-bottom:16px">${R(p.amount)}</div>
             ${UI.dl([['Parent',esc(p.parent)],['School',esc(p.school)],['Branch',esc(p.branch)],['Invoice',esc(p.ref)],['Date',esc(p.date)],['Method',esc(p.method)],['Gateway fee',R(Math.round(p.amount*0.029))]])}`,
-          foot:`<button class="btn btn-ghost">${MCIcon('printer')} Receipt</button>${p.status==='Failed'?`<button class="btn btn-primary">${MCIcon('refresh')} Retry Payment</button>`:''}`
+          foot:`<button class="btn btn-ghost" id="payRcpt">${MCIcon('printer')} Receipt</button>${p.status==='Failed'?`<button class="btn btn-primary" id="payRetry">${MCIcon('refresh')} Retry Payment</button>`:''}`,
+          mount(root,close){
+            root.querySelector('#payRcpt').addEventListener('click',()=>UI.downloadCSV('receipt-'+p.id+'.csv',
+              ['Reference','Parent','School','Amount (R)','Method','Date','Status'],
+              [[p.id,p.parent,p.school,p.amount,p.method,p.date,p.status]]));
+            const rt=root.querySelector('#payRetry');
+            if(rt) rt.addEventListener('click',()=>{
+              p.status='Successful';
+              DB.log('Retried payment',p.id+' — '+R(p.amount),'ok');
+              close();UI.toast('Payment retried successfully — '+R(p.amount)+' collected');App.refresh();
+            });
+          }
         }),
         columns:[
           {key:'id',label:'Reference'},
@@ -31,12 +42,12 @@ window.Pages=window.Pages||{};
       const methods=[['Card',46,'#EA580C'],['Debit Order',28,'#7C3AED'],['EFT',18,'#16A34A'],['Cash / other',8,'#2563EB']];
       return `
         ${UI.pageHead('Payments','Money moving through the platform in real time.',
-          `<button class="btn btn-ghost">${MCIcon('download')} Export</button>
-           <button class="btn btn-green">${MCIcon('plus')} Record Payment</button>`)}
+          `<button class="btn btn-ghost" id="payExp">${MCIcon('download')} Export</button>
+           <button class="btn btn-green" id="payNew">${MCIcon('plus')} Record Payment</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
-          ${UI.statCard({icon:'payments',tint:'t-green',label:'Collected This Month',value:'R2,450,800',deltaHtml:UI.delta(12.5,'up','vs last month')})}
-          ${UI.statCard({icon:'waiting',tint:'t-amber',label:'Pending Settlement',value:'R84,300',deltaHtml:`<span class="delta flat">clears in 1–2 days</span>`})}
-          ${UI.statCard({icon:'alert',tint:'t-red',label:'Failed Payments',value:'R23,150',deltaHtml:UI.delta(1.8,'down','improving')})}
+          ${UI.statCard({icon:'payments',tint:'t-green',label:'Collected This Month',value:DB.fmtR(DB.totals.mrr),deltaHtml:UI.delta(9.7,'up','vs last month')})}
+          ${UI.statCard({icon:'waiting',tint:'t-amber',label:'Pending Settlement',value:'R41,200',deltaHtml:`<span class="delta flat">clears in 1–2 days</span>`})}
+          ${UI.statCard({icon:'alert',tint:'t-red',label:'Failed Payments',value:'R9,850',deltaHtml:UI.delta(1.8,'down','improving')})}
           ${UI.statCard({icon:'creditUp',tint:'t-purple',label:'Success Rate',value:'96.8%',deltaHtml:UI.delta(0.4,'up','vs last month')})}
         </div>
         <div class="grid" style="grid-template-columns:1.7fr 1fr;margin-bottom:20px" id="payMid">
@@ -55,7 +66,36 @@ window.Pages=window.Pages||{};
         </div>
         <style>@media(max-width:1100px){#payMid{grid-template-columns:1fr}}</style>`;
     },
-    mount(root){ root.querySelector('#payQ').addEventListener('input',e=>UI.tableFilter(Pages.payments._tid,e.target.value)); }
+    mount(root){
+      root.querySelector('#payQ').addEventListener('input',e=>UI.tableFilter(Pages.payments._tid,e.target.value));
+      root.querySelector('#payExp').addEventListener('click',()=>UI.downloadCSV('mobsie-payments.csv',
+        ['Reference','Parent','School','Amount (R)','Method','Date','Status'],
+        DB.payments.map(p=>[p.id,p.parent,p.school,p.amount,p.method,p.date,p.status])));
+      root.querySelector('#payNew').addEventListener('click',()=>UI.modal({
+        title:'Record Payment',
+        body:`<div class="field"><label>Parent</label><select data-f="parent">${DB.parents.slice(0,20).map(p=>`<option>${esc(p.name)}</option>`).join('')}</select></div>
+          <div class="form-row">
+            <div class="field"><label>Amount (R)</label><input type="number" data-f="amount" placeholder="0.00"></div>
+            <div class="field"><label>Method</label><select data-f="method"><option>Cash</option><option>EFT</option><option>Card</option><option>SnapScan</option></select></div>
+          </div>`,
+        foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-green" data-s>Record Payment</button>`,
+        mount(r,close){
+          r.querySelector('[data-x]').addEventListener('click',close);
+          r.querySelector('[data-s]').addEventListener('click',()=>{
+            const v=UI.formVals(r);
+            const amt=Math.round(+v.amount||0);
+            if(!amt){UI.toast('Enter an amount first','alert');return;}
+            const par=DB.parents.find(p=>p.name===v.parent)||DB.parents[0];
+            DB.payments.unshift({id:'PAY-'+(9033+DB.payments.length),parent:par.name,school:par.school,
+              branch:par.branch,amount:amt,method:v.method,date:'May 18, 2026',status:'Successful',
+              ref:'Manual capture'});
+            if(par.balance) par.balance=Math.max(0,par.balance-amt);
+            DB.log('Recorded payment',par.name+' — '+R(amt),'ok');
+            close();UI.toast(R(amt)+' recorded against '+par.name);App.refresh();
+          });
+        }
+      }));
+    }
   };
 
   /* ---------- Invoices ---------- */
@@ -79,9 +119,23 @@ window.Pages=window.Pages||{};
               <tr><td>Mobsie app service fee</td><td class="num"><b>R120</b></td></tr>
               <tr><td class="cell-main">Total</td><td class="num cell-main">${R(inv.amount)}</td></tr>
             </tbody></table>`,
-          foot:`<button class="btn btn-ghost">${MCIcon('download')} PDF</button>
-                <button class="btn btn-ghost">${MCIcon('campaigns')} Resend</button>
-                ${inv.status!=='Paid'?`<button class="btn btn-green">${MCIcon('check')} Mark Paid</button>`:''}`
+          foot:`<button class="btn btn-ghost" id="invPdf">${MCIcon('download')} PDF</button>
+                <button class="btn btn-ghost" id="invResend">${MCIcon('campaigns')} Resend</button>
+                ${inv.status!=='Paid'?`<button class="btn btn-green" id="invPaid">${MCIcon('check')} Mark Paid</button>`:''}`,
+          mount(root,close){
+            root.querySelector('#invPdf').addEventListener('click',()=>UI.downloadCSV(inv.id+'.csv',
+              ['Invoice','Billed to','School','Description','Amount (R)','Issued','Due','Status'],
+              [[inv.id,inv.parent,inv.school,inv.desc,inv.amount,inv.issued,inv.due,inv.status]]));
+            root.querySelector('#invResend').addEventListener('click',()=>UI.toast('Invoice resent to '+inv.parent));
+            const mp=root.querySelector('#invPaid');
+            if(mp) mp.addEventListener('click',()=>{
+              inv.status='Paid';
+              DB.payments.unshift({id:'PAY-'+(9033+DB.payments.length),parent:inv.parent,school:inv.school,
+                branch:inv.branch,amount:inv.amount,method:'EFT',date:'May 18, 2026',status:'Successful',ref:inv.id});
+              DB.log('Marked invoice paid',inv.id+' — '+R(inv.amount),'ok');
+              close();UI.toast(inv.id+' marked paid — receipt sent');App.refresh();
+            });
+          }
         }),
         columns:[
           {key:'id',label:'Invoice'},
@@ -95,13 +149,13 @@ window.Pages=window.Pages||{};
       Pages.invoices._tid=UI.lastTableId();
       return `
         ${UI.pageHead('Invoices','Automated billing for every family, every month.',
-          `<button class="btn btn-ghost">${MCIcon('settings')} Billing Rules</button>
-           <button class="btn btn-primary">${MCIcon('plus')} New Invoice</button>`)}
+          `<button class="btn btn-ghost" id="invRules">${MCIcon('settings')} Billing Rules</button>
+           <button class="btn btn-primary" id="invNew">${MCIcon('plus')} New Invoice</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
-          ${UI.statCard({icon:'invoices',tint:'t-blue',label:'Issued This Month',value:F(18742),deltaHtml:`<span class="delta flat">auto-run May 18, 08:00</span>`})}
+          ${UI.statCard({icon:'invoices',tint:'t-blue',label:'Issued This Month',value:F(DB.totals.parents),deltaHtml:`<span class="delta flat">auto-run May 18, 08:00</span>`})}
           ${UI.statCard({icon:'check',tint:'t-green',label:'Paid',value:'87%',deltaHtml:UI.delta(2.1,'up','vs last month')})}
-          ${UI.statCard({icon:'waiting',tint:'t-amber',label:'Due',value:F(due*74),deltaHtml:`<span class="delta flat">value R412,900</span>`})}
-          ${UI.statCard({icon:'alert',tint:'t-red',label:'Overdue',value:F(over*57),deltaHtml:`<span class="delta flat">value R320,450</span>`})}
+          ${UI.statCard({icon:'waiting',tint:'t-amber',label:'Due',value:F(due*3),deltaHtml:`<span class="delta flat">value R48,900</span>`})}
+          ${UI.statCard({icon:'alert',tint:'t-red',label:'Overdue',value:F(over*2),deltaHtml:`<span class="delta flat">value R35,450</span>`})}
         </div>
         <div class="card">
           <div class="card-head"><div><h3>All invoices</h3></div><span class="spacer"></span>
@@ -109,15 +163,42 @@ window.Pages=window.Pages||{};
           <div class="card-body" style="padding:0;padding-top:8px">${tbl}</div>
         </div>`;
     },
-    mount(root){ root.querySelector('#invQ').addEventListener('input',e=>UI.tableFilter(Pages.invoices._tid,e.target.value)); }
+    mount(root){
+      root.querySelector('#invQ').addEventListener('input',e=>UI.tableFilter(Pages.invoices._tid,e.target.value));
+      root.querySelector('#invRules').addEventListener('click',()=>App.go('settings'));
+      root.querySelector('#invNew').addEventListener('click',()=>UI.modal({
+        title:'New Invoice',
+        body:`<div class="field"><label>Bill to</label><select data-f="parent">${DB.parents.slice(0,20).map(p=>`<option>${esc(p.name)}</option>`).join('')}</select></div>
+          <div class="field"><label>Description</label><input type="text" data-f="desc" placeholder="e.g. Aftercare — June"></div>
+          <div class="form-row">
+            <div class="field"><label>Amount (R)</label><input type="number" data-f="amount" placeholder="0.00"></div>
+            <div class="field"><label>Due date</label><input type="text" data-f="due" value="May 31, 2026"></div>
+          </div>`,
+        foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" data-s>Issue Invoice</button>`,
+        mount(r,close){
+          r.querySelector('[data-x]').addEventListener('click',close);
+          r.querySelector('[data-s]').addEventListener('click',()=>{
+            const v=UI.formVals(r);
+            const amt=Math.round(+v.amount||0);
+            if(!amt||!v.desc){UI.toast('Description and amount are required','alert');return;}
+            const par=DB.parents.find(p=>p.name===v.parent)||DB.parents[0];
+            DB.invoices.unshift({id:'INV-'+String(881+DB.invoices.length).padStart(6,'0'),parent:par.name,
+              school:par.school,branch:par.branch,desc:v.desc,amount:amt,issued:'May 18, 2026',
+              due:v.due||'May 31, 2026',status:'Due'});
+            DB.log('Issued invoice',par.name+' — '+R(amt),'info');
+            close();UI.toast('Invoice issued and delivered to '+par.name+"'s app");App.refresh();
+          });
+        }
+      }));
+    }
   };
 
   /* ---------- Statements ---------- */
   Pages.statements={
     render(){
-      const rows=DB.schools.slice(0,14).map((s,i)=>({
-        school:s.name, period:'May 2026', invoiced:s.mrr, collected:Math.round(s.mrr*(0.82+(i%9)*0.015)),
-        fees:Math.round(s.mrr*0.029), payout:0, status:i<3?'Paid':(i<5?'Processing':'Scheduled'),
+      const rows=DB.liveBranches().map((b,i)=>({
+        school:b.name, period:'May 2026', invoiced:b.revenue, collected:Math.round(b.revenue*(0.86+(i%5)*0.015)),
+        fees:Math.round(b.revenue*0.029), payout:0, status:i<2?'Paid':(i<3?'Processing':'Scheduled'),
       })).map(r=>({...r,payout:r.collected-r.fees}));
       const tbl=UI.table({
         pageSize:8, rows,
@@ -131,7 +212,7 @@ window.Pages=window.Pages||{};
           foot:`<button class="btn btn-ghost">${MCIcon('download')} Download PDF</button><button class="btn btn-primary">${MCIcon('campaigns')} Email to Owner</button>`
         }),
         columns:[
-          {key:'school',label:'School',render:r=>`<span class="cell-main">${esc(r.school)}</span>`},
+          {key:'school',label:'Campus',render:r=>`<span class="cell-main">${esc(r.school)}</span>`},
           {key:'period',label:'Period'},
           {key:'invoiced',label:'Invoiced',num:true,render:r=>R(r.invoiced)},
           {key:'collected',label:'Collected',num:true,render:r=>R(r.collected)},
@@ -141,17 +222,25 @@ window.Pages=window.Pages||{};
         ],
       });
       return `
-        ${UI.pageHead('Statements','Monthly school statements and payout reconciliation.',
+        ${UI.pageHead('Statements','Monthly campus statements and payout reconciliation.',
           `<button class="select">${MCIcon('calendar')} May 2026 ${MCIcon('chevDown')}</button>
-           <button class="btn btn-primary">${MCIcon('download')} Download All</button>`)}
+           <button class="btn btn-primary" id="stDlAll">${MCIcon('download')} Download All</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
-          ${UI.statCard({icon:'statements',tint:'t-purple',label:'Statements Generated',value:'128',deltaHtml:`<span class="delta flat">1 per school · May</span>`})}
+          ${UI.statCard({icon:'statements',tint:'t-purple',label:'Statements Generated',value:String(DB.liveBranches().length),deltaHtml:`<span class="delta flat">1 per campus · May</span>`})}
           ${UI.statCard({icon:'payments',tint:'t-green',label:'Total Collected',value:Rk(DB.totals.mrr*0.87),deltaHtml:UI.delta(9.1,'up','vs April')})}
           ${UI.statCard({icon:'wallet',tint:'t-blue',label:'Payouts Scheduled',value:Rk(DB.totals.mrr*0.84),deltaHtml:`<span class="delta flat">runs 1 Jun</span>`})}
           ${UI.statCard({icon:'discounts',tint:'t-amber',label:'Platform Fees',value:Rk(DB.totals.mrr*0.029),deltaHtml:`<span class="delta flat">2.9% blended</span>`})}
         </div>
-        <div class="card"><div class="card-head"><div><h3>School statements — May 2026</h3></div></div>
+        <div class="card"><div class="card-head"><div><h3>Campus statements — May 2026</h3></div></div>
           <div class="card-body" style="padding:0;padding-top:8px">${tbl}</div></div>`;
+    },
+    mount(root){
+      root.querySelector('#stDlAll').addEventListener('click',()=>UI.downloadCSV('mobsie-statements-may-2026.csv',
+        ['Campus','Period','Invoiced (R)','Collected (R)','Fees (R)','Net payout (R)','Status'],
+        DB.liveBranches().map((b,i)=>{
+          const col=Math.round(b.revenue*(0.86+(i%5)*0.015)), fee=Math.round(b.revenue*0.029);
+          return [b.name,'May 2026',b.revenue,col,fee,col-fee,i<2?'Paid':(i<3?'Processing':'Scheduled')];
+        })));
     }
   };
 
@@ -173,9 +262,9 @@ window.Pages=window.Pages||{};
         ${UI.pageHead('Discounts','Sibling, staff and promotional discounts across the platform.',
           `<button class="btn btn-primary" id="newDisc">${MCIcon('plus')} Create Discount</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
-          ${UI.statCard({icon:'discounts',tint:'t-orange',label:'Active Discounts',value:'4',deltaHtml:`<span class="delta flat">2 platform-wide</span>`})}
-          ${UI.statCard({icon:'parents',tint:'t-purple',label:'Families Benefiting',value:F(888),deltaHtml:UI.delta(6,'up','this term')})}
-          ${UI.statCard({icon:'wallet',tint:'t-amber',label:'Value This Month',value:'R186,400',deltaHtml:`<span class="delta flat">7.6% of billing</span>`})}
+          ${UI.statCard({icon:'discounts',tint:'t-orange',label:'Active Discounts',value:String(DB.discounts.filter(d=>d.status==='Active').length),deltaHtml:`<span class="delta flat">across all campuses</span>`})}
+          ${UI.statCard({icon:'parents',tint:'t-purple',label:'Families Benefiting',value:F(DB.discounts.reduce((a,d)=>a+d.uses,0)),deltaHtml:UI.delta(6,'up','this term')})}
+          ${UI.statCard({icon:'wallet',tint:'t-amber',label:'Value This Month',value:'R38,400',deltaHtml:`<span class="delta flat">2.1% of billing</span>`})}
           ${UI.statCard({icon:'creditUp',tint:'t-green',label:'Retention Impact',value:'+3.8%',deltaHtml:`<span class="delta flat">discounted vs not</span>`})}
         </div>
         <div class="card"><div class="card-head"><div><h3>Discount codes</h3></div></div>
@@ -184,29 +273,49 @@ window.Pages=window.Pages||{};
     mount(root){
       root.addEventListener('click',e=>{
         const b=e.target.closest('[data-dmenu]');
-        if(b) UI.menu(b,[
-          {icon:'edit',label:'Edit discount',onClick:()=>UI.toast('Edit '+b.dataset.dmenu)},
-          {icon:'copy',label:'Duplicate',onClick:()=>UI.toast('Duplicated '+b.dataset.dmenu)},
-          {icon:'pause',label:'Pause',onClick:()=>UI.toast('Paused '+b.dataset.dmenu)},
+        if(!b) return;
+        const d=DB.discounts.find(x=>x.code===b.dataset.dmenu);
+        if(!d) return;
+        UI.menu(b,[
+          {icon:'copy',label:'Duplicate',onClick:()=>{
+            DB.discounts.unshift({...d,code:d.code+'2',uses:0,status:'Scheduled'});
+            DB.log('Duplicated discount',d.code,'info');
+            UI.toast('Duplicated as '+d.code+'2');App.refresh();
+          }},
+          {icon:'pause',label:d.status==='Active'?'Pause':'Activate',onClick:()=>{
+            d.status=d.status==='Active'?'Scheduled':'Active';
+            UI.toast(d.code+(d.status==='Active'?' activated':' paused'));App.refresh();
+          }},
           '-',
-          {icon:'trash',label:'Delete',danger:true,onClick:()=>UI.toast('Deleted '+b.dataset.dmenu)},
+          {icon:'trash',label:'Delete',danger:true,onClick:()=>{
+            DB.discounts.splice(DB.discounts.indexOf(d),1);
+            DB.log('Deleted discount',d.code,'warn');
+            UI.toast('Deleted '+d.code);App.refresh();
+          }},
         ],{align:'right'});
       });
       root.querySelector('#newDisc').addEventListener('click',()=>UI.modal({
         title:'Create Discount',
         body:`<div class="form-row">
-            <div class="field"><label>Code</label><input type="text" placeholder="e.g. SPRING10"></div>
-            <div class="field"><label>Benefit</label><select><option>% off fees</option><option>Fixed amount off</option><option>Waive registration</option></select></div>
+            <div class="field"><label>Code</label><input type="text" data-f="code" placeholder="e.g. SPRING10"></div>
+            <div class="field"><label>Benefit</label><input type="text" data-f="type" placeholder="e.g. 10% off fees"></div>
           </div>
-          <div class="field"><label>Description</label><input type="text" placeholder="What is this discount for?"></div>
+          <div class="field"><label>Description</label><input type="text" data-f="desc" placeholder="What is this discount for?"></div>
           <div class="form-row">
-            <div class="field"><label>Applies to</label><select><option>All schools</option><option>Selected schools</option><option>One school</option></select></div>
-            <div class="field"><label>Usage limit</label><input type="number" placeholder="Unlimited"></div>
+            <div class="field"><label>Applies to</label><select data-f="schools"><option>All schools</option><option>Selected schools</option><option>One school</option></select></div>
+            <div class="field"><label>Usage limit</label><input type="text" data-f="limit" placeholder="Unlimited"></div>
           </div>`,
         foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" data-s>Create Discount</button>`,
         mount(r,close){
           r.querySelector('[data-x]').addEventListener('click',close);
-          r.querySelector('[data-s]').addEventListener('click',()=>{close();UI.toast('Discount created and live');});
+          r.querySelector('[data-s]').addEventListener('click',()=>{
+            const v=UI.formVals(r);
+            if(!v.code){UI.toast('Give the discount a code first','alert');return;}
+            DB.discounts.unshift({code:v.code.toUpperCase(),desc:v.desc||'Custom discount',
+              type:v.type||'Custom benefit',uses:0,limit:v.limit||'Unlimited',status:'Active',schools:v.schools});
+            DB.log('Created discount',v.code.toUpperCase(),'ok');
+            close();UI.toast('Discount '+v.code.toUpperCase()+' created and live');App.refresh();
+          });
         }
       }));
     }

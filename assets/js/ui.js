@@ -22,6 +22,7 @@
     'Interview Scheduled':'teal','Ready for Collection':'teal','In Progress':'blue','Open':'orange','New':'orange','On Hold':'orange',
     'Suspended':'red','Rejected':'red','Overdue':'red','Failed':'red','Out of Stock':'red','Urgent':'red','Expired':'ink',
     'High':'amber','Normal':'blue','Standard':'ink','Sibling':'purple','Staff Child':'teal','In-person':'blue',
+    'Offered':'teal','Hidden':'ink','Invited':'purple','Generating':'amber',
   };
   const badge=(text,tone)=>`<span class="badge ${TONES[tone]||'t-ink'}"><span class="bdot"></span>${esc(text)}</span>`;
   const status=s=>badge(s,STATUS_TONE[s]||'ink');
@@ -216,6 +217,26 @@
   /* ---- Detail list for drawers ---- */
   const dl=pairs=>`<dl class="dl">${pairs.map(p=>`<dt>${esc(p[0])}</dt><dd>${p[1]}</dd>`).join('')}</dl>`;
 
+  /* ---- Read form values out of a modal/drawer: elements marked data-f="key" ---- */
+  const formVals=root=>{
+    const o={};
+    root.querySelectorAll('[data-f]').forEach(el=>o[el.dataset.f]=el.value.trim());
+    return o;
+  };
+
+  /* ---- Real CSV download ---- */
+  function downloadCSV(name,header,rows){
+    const cell=v=>{v=String(v==null?'':v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+    const csv=[header.map(cell).join(',')].concat(rows.map(r=>r.map(cell).join(','))).join('\n');
+    try{
+      const url=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
+      const a=document.createElement('a');
+      a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1200);
+      toast('Downloaded '+name);
+    }catch(e){toast('Downloads are blocked in this preview — works in the full build');}
+  }
+
   /* ---- Pill tab group (returns html; bind with bindPills) ---- */
   function pills(id,options,active){
     return `<div class="pill-tabs" id="${id}">${options.map((o,i)=>`<button class="${i===(active||0)?'on':''}" data-pill="${i}">${esc(o)}</button>`).join('')}</div>`;
@@ -229,5 +250,6 @@
   }
 
   window.UI={esc,avatar,avStack,badge,status,delta,pageHead,statCard,card,legend,meterRow,empty,personCell,
-    table,hydrate,tableFilter,tableRows,lastTableId,drawer,modal,menu,closeMenu,toast,dl,pills,bindPills};
+    table,hydrate,tableFilter,tableRows,lastTableId,drawer,modal,menu,closeMenu,toast,dl,pills,bindPills,
+    formVals,downloadCSV};
 })();

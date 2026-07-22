@@ -1,8 +1,19 @@
 # Mobsie Connect — Control Centre
 
-An enterprise-grade, multi-tenant **school management platform** design, built to the standard of
-HubSpot, Stripe, Linear and Google Workspace Admin — while keeping the friendly orange / green /
-purple identity of the Mobsie Connect mobile app.
+An enterprise-grade **school management platform**, built to the standard of HubSpot, Stripe,
+Linear and Google Workspace Admin — with the friendly orange / green / purple identity of the
+Mobsie Connect mobile app.
+
+Seeded with the real school structure: **5 live campuses** — Soshanguve Branch 1 & 2 and
+Mamelodi (Pretoria), Cosmo City–Randburg and Sky-City–Alberton (Johannesburg) — plus an
+expansion pipeline for **Atteridgeville, Soweto and Thembisa**. The school group's name is a
+single constant (`SCHOOL_NAME` in `assets/js/data.js`) — change it once and it flows everywhere.
+
+**Fully interactive**: every button performs a real action against the demo data — approve or
+reject applications, schedule interviews, open a new campus, enrol learners, mark invoices paid,
+retry failed payments, restock the shop, resolve support tickets, send newsletters/push/SMS,
+toggle RBAC permissions, download real CSV exports. Changes persist in your browser
+(localStorage) and can be cleared with **Settings → Reset Demo Data**.
 
 **Open `index.html` in any browser. No build step, no dependencies, no server required.**
 
@@ -28,9 +39,10 @@ python3 -m http.server 8000   # optional — file:// works too
 
 ## Product model
 
-Multi-tenant hierarchy: **Platform → Schools → Branches → Teachers → Classes → Parents → Students.**
-Every record belongs to a school; schools have unlimited branches. The top-bar **school / branch
-switcher** lets a Super Admin jump into any school instantly — every scoped page re-filters live.
+Hierarchy: **Platform → School → Campuses (branches) → Teachers → Classes → Parents → Learners.**
+The architecture stays multi-tenant-ready (unlimited campuses per school), while the data reflects
+the real 5-campus school group. The top-bar **campus switcher** jumps into any campus instantly —
+every scoped page re-filters live.
 
 Roles: Super Admin, School Owner, Branch Principal, Finance Manager, Admissions, Teacher, Parent
 (mobile app) — enforced visually through the Roles & Permissions matrix.

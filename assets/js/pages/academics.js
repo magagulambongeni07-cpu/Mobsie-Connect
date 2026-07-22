@@ -11,11 +11,10 @@ window.Pages=window.Pages||{};
       const data=grades.map((g,i)=>days.map((d,j)=>{
         const v=88+((i*3+j*5)%11); return v>98?98:v;
       }));
-      const branchRows=DB.branches.slice(0,60);
       const tbl=UI.table({
-        pageSize:8, rows:App.school()?branchRows.filter(b=>b.schoolId===App.school().id):branchRows,
+        pageSize:8, rows:DB.liveBranches(),
         columns:[
-          {key:'name',label:'Branch',render:r=>`<div class="cell-main">${esc(r.name)}</div><div class="cell-sub">${esc(r.school)}</div>`},
+          {key:'name',label:'Campus',render:r=>`<div class="cell-main">${esc(r.name)}</div><div class="cell-sub">${esc(r.city)}</div>`},
           {key:'students',label:'Learners',num:true,render:r=>F(r.students)},
           {key:'attendance',label:'This week',render:r=>`<div style="display:flex;align-items:center;gap:10px;min-width:150px"><span class="meter"><i style="width:${r.attendance}%"></i></span><b style="font-variant-numeric:tabular-nums">${r.attendance}%</b></div>`},
           {label:'Late arrivals',num:true,sortable:false,render:r=>String(Math.max(0,Math.round((100-r.attendance)*1.4)))},
@@ -24,9 +23,9 @@ window.Pages=window.Pages||{};
         ],
       });
       return `
-        ${UI.pageHead('Attendance','Live attendance across every school, branch and class.',
-          `<button class="btn btn-ghost">${MCIcon('download')} Export Register</button>
-           <button class="btn btn-primary">${MCIcon('attendance')} Capture Attendance</button>`)}
+        ${UI.pageHead('Attendance','Live attendance across every campus and class.',
+          `<button class="btn btn-ghost" id="attExp">${MCIcon('download')} Export Register</button>
+           <button class="btn btn-primary" id="attCap">${MCIcon('attendance')} Capture Attendance</button>`)}
         <div class="grid" style="grid-template-columns:1fr 1.6fr;margin-bottom:20px" id="attTop">
           ${UI.card('Platform average',`
             <div style="display:flex;align-items:center;gap:20px">
@@ -42,31 +41,49 @@ window.Pages=window.Pages||{};
             ${UI.meterRow('Playgroup',93)}${UI.meterRow('Nursery',91)}${UI.meterRow('Grade R',92)}${UI.meterRow('Grade 1',91)}${UI.meterRow('Grade 2',90)}`)}
           ${UI.card('Attendance heatmap','<div class="chart-box" style="overflow-x:auto">'+Charts.heatmap({rows:grades,cols:days,data})+'</div>',{sub:'Grade × school day (May) · % present',right:UI.legend([{color:'#DCFCE7',label:'≤84%'},{color:'#4ADE80',label:'88–92%'},{color:'#15803D',label:'96%+'}])})}
         </div>
-        <div class="card"><div class="card-head"><div><h3>Attendance by branch</h3></div></div>
+        <div class="card"><div class="card-head"><div><h3>Attendance by campus</h3></div></div>
           <div class="card-body" style="padding:0;padding-top:8px">${tbl}</div></div>
         <style>@media(max-width:1100px){#attTop{grid-template-columns:1fr}}</style>`;
+    },
+    mount(root){
+      root.querySelector('#attExp').addEventListener('click',()=>UI.downloadCSV('attendance-register-may.csv',
+        ['Campus','Learners','This week %','Late arrivals','Absent today'],
+        DB.liveBranches().map(b=>[b.name,b.students,b.attendance,Math.round((100-b.attendance)*1.4),Math.round((100-b.attendance)*.9)])));
+      root.querySelector('#attCap').addEventListener('click',()=>UI.modal({
+        title:'Capture Attendance',
+        body:`<div class="form-row">
+            <div class="field"><label>Campus</label><select data-f="branch">${DB.liveBranches().map(b=>`<option>${esc(b.name)}</option>`).join('')}</select></div>
+            <div class="field"><label>Class</label><select data-f="grade">${DB.GRADES.map(g=>`<option>${g}</option>`).join('')}</select></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Present</label><input type="number" data-f="present" value="18"></div>
+            <div class="field"><label>Absent</label><input type="number" data-f="absent" value="2"></div>
+          </div>`,
+        foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" data-s>Save Register</button>`,
+        mount(r,close){
+          r.querySelector('[data-x]').addEventListener('click',close);
+          r.querySelector('[data-s]').addEventListener('click',()=>{
+            const v=UI.formVals(r);
+            DB.log('Captured attendance',v.grade+' — '+v.branch+' ('+v.present+' present, '+v.absent+' absent)','ok');
+            close();UI.toast('Register saved — parents of absentees notified');App.refresh();
+          });
+        }
+      }));
     }
   };
 
   /* ---------- Homework ---------- */
   Pages.homework={
     render(){
-      const items=[
-        {title:'Counting to 20 with objects',cls:'Grade R A',school:'Little Stars Academy',teacher:'Naledi Khumalo',due:'May 19',done:88,subject:'Numeracy',tint:'t-orange'},
-        {title:'My Family — drawing & telling',cls:'Nursery B',school:'Hebron Preschool',teacher:'Sipho Dlamini',due:'May 19',done:74,subject:'Life Skills',tint:'t-green'},
-        {title:'Letter sounds: S, A, T',cls:'Grade R B',school:'Bright Kids Academy',teacher:'Palesa Nkosi',due:'May 20',done:65,subject:'Literacy',tint:'t-purple'},
-        {title:'Shapes hunt at home',cls:'Grade 1 A',school:'Future Leaders Academy',teacher:'Karabo Mnisi',due:'May 20',done:52,subject:'Numeracy',tint:'t-blue'},
-        {title:'Read-along: The Hungry Caterpillar',cls:'Grade 1 B',school:'Sunshine Kids',teacher:'Zanele Mabaso',due:'May 21',done:41,subject:'Literacy',tint:'t-teal'},
-        {title:'Winter clothing collage',cls:'Grade 2 A',school:'Little Stars Academy',teacher:'Lerato Mokoena',due:'May 22',done:12,subject:'Art',tint:'t-pink'},
-      ];
+      const items=DB.homeworkList;
       return `
         ${UI.pageHead('Homework','Activities set by teachers, with live completion tracking for parents.',
-          `<button class="btn btn-primary">${MCIcon('plus')} New Activity</button>`)}
+          `<button class="btn btn-primary" id="hwNew">${MCIcon('plus')} New Activity</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
-          ${UI.statCard({icon:'homework',tint:'t-purple',label:'Active Activities',value:'312',deltaHtml:UI.delta(0,'up','this week').replace('0%','48')})}
+          ${UI.statCard({icon:'homework',tint:'t-purple',label:'Active Activities',value:String(items.length+26),deltaHtml:UI.delta(0,'up','this week').replace('0%','8')})}
           ${UI.statCard({icon:'check',tint:'t-green',label:'Avg Completion',value:'78%',deltaHtml:UI.delta(5.2,'up','vs last week')})}
-          ${UI.statCard({icon:'parents',tint:'t-blue',label:'Parent Views',value:'14,208',deltaHtml:UI.delta(11,'up','this week')})}
-          ${UI.statCard({icon:'clock',tint:'t-amber',label:'Due This Week',value:'96',deltaHtml:`<span class="delta flat">across 42 classes</span>`})}
+          ${UI.statCard({icon:'parents',tint:'t-blue',label:'Parent Views',value:'2,408',deltaHtml:UI.delta(11,'up','this week')})}
+          ${UI.statCard({icon:'clock',tint:'t-amber',label:'Due This Week',value:'18',deltaHtml:`<span class="delta flat">across 42 classes</span>`})}
         </div>
         <div class="grid cards-3">${items.map(h=>`
           <div class="card" style="padding:18px">
@@ -88,24 +105,45 @@ window.Pages=window.Pages||{};
               <b class="small" style="font-variant-numeric:tabular-nums">${h.done}%</b>
             </div>
           </div>`).join('')}</div>`;
+    },
+    mount(root){
+      root.querySelector('#hwNew').addEventListener('click',()=>UI.modal({
+        title:'New Homework Activity',
+        body:`<div class="field"><label>Activity title</label><input type="text" data-f="title" placeholder="e.g. Colour the seasons"></div>
+          <div class="form-row">
+            <div class="field"><label>Campus</label><select data-f="school">${DB.liveBranches().map(b=>`<option>${esc(b.name)}</option>`).join('')}</select></div>
+            <div class="field"><label>Class</label><select data-f="cls">${DB.GRADES.map(g=>`<option>${g} A</option>`).join('')}</select></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Subject</label><select data-f="subject"><option>Numeracy</option><option>Literacy</option><option>Life Skills</option><option>Art</option></select></div>
+            <div class="field"><label>Due</label><input type="text" data-f="due" value="May 23"></div>
+          </div>`,
+        foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" data-s>Publish to Parents</button>`,
+        mount(r,close){
+          r.querySelector('[data-x]').addEventListener('click',close);
+          r.querySelector('[data-s]').addEventListener('click',()=>{
+            const v=UI.formVals(r);
+            if(!v.title){UI.toast('Give the activity a title first','alert');return;}
+            const tints={Numeracy:'t-orange',Literacy:'t-purple','Life Skills':'t-green',Art:'t-pink'};
+            DB.homeworkList.unshift({title:v.title,cls:v.cls,school:v.school,teacher:'Thandi Admin',
+              due:v.due,done:0,subject:v.subject,tint:tints[v.subject]||'t-blue'});
+            DB.log('Published homework',v.title+' — '+v.cls,'ok');
+            close();UI.toast('Activity published — parents notified in the app');App.refresh();
+          });
+        }
+      }));
     }
   };
 
   /* ---------- Reports ---------- */
   Pages.reports={
     render(){
-      const reports=[
-        {name:'Term 2 Progress Reports',type:'Report cards',scope:'All schools',date:'Due Jun 20',status:'In Progress',done:64,tint:'t-purple'},
-        {name:'Attendance Summary — May',type:'Attendance',scope:'All branches',date:'Generated May 18',status:'Completed',done:100,tint:'t-green'},
-        {name:'Fee Collection Report — May',type:'Finance',scope:'All schools',date:'Generated May 18',status:'Completed',done:100,tint:'t-blue'},
-        {name:'Learner Development — Playgroup',type:'Milestones',scope:'12 schools',date:'Due May 30',status:'In Progress',done:38,tint:'t-orange'},
-        {name:'Staff Performance Q2',type:'HR',scope:'Platform',date:'Due Jun 30',status:'Scheduled',done:0,tint:'t-teal'},
-      ];
+      const reports=DB.reportRuns;
       const gs=DB.growthSeries;
       return `
         ${UI.pageHead('Reports','Report cards, milestone tracking and operational reporting.',
-          `<button class="btn btn-ghost">${MCIcon('download')} Download Centre</button>
-           <button class="btn btn-purple">${MCIcon('sparkle')} Generate Report</button>`)}
+          `<button class="btn btn-ghost" id="repDl">${MCIcon('download')} Download Centre</button>
+           <button class="btn btn-purple" id="repGen">${MCIcon('sparkle')} Generate Report</button>`)}
         <div class="grid" style="grid-template-columns:1.5fr 1fr;margin-bottom:20px" id="repTop">
           ${UI.card('Report card completion by grade',`
             ${UI.meterRow('Playgroup',82,'purple')}
@@ -115,7 +153,7 @@ window.Pages=window.Pages||{};
             ${UI.meterRow('Grade 1',54,'purple')}
             ${UI.meterRow('Grade 2',49,'purple')}`,
             {sub:'Term 2 · teacher submissions received'})}
-          ${UI.card('Reports generated',`<div class="chart-box">${Charts.bars({labels:gs.labels,series:[{name:'Reports',color:'#7C3AED',data:[840,910,1180,1050,1320,1465]}],height:208,capLabels:true})}</div>`,{sub:'Monthly, all schools'})}
+          ${UI.card('Reports generated',`<div class="chart-box">${Charts.bars({labels:gs.labels,series:[{name:'Reports',color:'#7C3AED',data:[184,210,248,232,286,312]}],height:208,capLabels:true})}</div>`,{sub:'Monthly, all campuses'})}
         </div>
         <div class="card"><div class="card-head"><div><h3>Report runs</h3></div></div>
           <div class="card-body" style="padding-top:8px">
@@ -127,10 +165,47 @@ window.Pages=window.Pages||{};
                 <span class="small" style="font-weight:700;width:40px;text-align:right;font-variant-numeric:tabular-nums">${r.done}%</span>
                 <span class="small muted" style="width:130px">${esc(r.date)}</span>
                 ${UI.status(r.status)}
-                <button class="icon-btn" style="margin-left:auto">${MCIcon('download')}</button>
+                <button class="icon-btn" style="margin-left:auto" data-repdl="${esc(r.name)}">${MCIcon('download')}</button>
               </div>`).join('')}</div>
           </div></div>
         <style>@media(max-width:1100px){#repTop{grid-template-columns:1fr}}</style>`;
+    },
+    mount(root){
+      root.addEventListener('click',e=>{
+        const b=e.target.closest('[data-repdl]');
+        if(b){
+          const r=DB.reportRuns.find(x=>x.name===b.dataset.repdl);
+          if(r&&r.done===100) UI.downloadCSV(r.name.replace(/[^\w]+/g,'-').toLowerCase()+'.csv',
+            ['Report','Type','Scope','Status','Completion %'],[[r.name,r.type,r.scope,r.status,r.done]]);
+          else UI.toast('Report still generating — '+(r?r.done:0)+'% complete');
+        }
+      });
+      root.querySelector('#repDl').addEventListener('click',()=>UI.downloadCSV('mobsie-report-runs.csv',
+        ['Report','Type','Scope','Date','Status','Completion %'],
+        DB.reportRuns.map(r=>[r.name,r.type,r.scope,r.date,r.status,r.done])));
+      root.querySelector('#repGen').addEventListener('click',()=>UI.modal({
+        title:'Generate Report',
+        body:`<div class="field"><label>Report type</label><select data-f="type"><option>Attendance</option><option>Finance</option><option>Report cards</option><option>Milestones</option><option>Operations</option></select></div>
+          <div class="form-row">
+            <div class="field"><label>Scope</label><select data-f="scope"><option>All campuses</option>${DB.liveBranches().map(b=>`<option>${esc(b.name)}</option>`).join('')}</select></div>
+            <div class="field"><label>Period</label><select data-f="period"><option>May 2026</option><option>Term 2</option><option>Year to date</option></select></div>
+          </div>`,
+        foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-purple" data-s>${MCIcon('sparkle')} Generate</button>`,
+        mount(r,close){
+          r.querySelector('[data-x]').addEventListener('click',close);
+          r.querySelector('[data-s]').addEventListener('click',()=>{
+            const v=UI.formVals(r);
+            const tints={Attendance:'t-green',Finance:'t-blue','Report cards':'t-purple',Milestones:'t-orange',Operations:'t-teal'};
+            const run={name:v.type+' — '+v.period,type:v.type,scope:v.scope,date:'Generating now',
+              status:'Generating',done:8,tint:tints[v.type]};
+            DB.reportRuns.unshift(run);
+            DB.log('Generated report',run.name,'info');
+            close();UI.toast('Report queued — you\'ll be notified when it\'s ready');App.refresh();
+            setTimeout(()=>{run.done=100;run.status='Completed';run.date='Generated May 18';
+              if(App.route==='reports')App.refresh();UI.toast(run.name+' is ready 📊');},2600);
+          });
+        }
+      }));
     }
   };
 
@@ -142,11 +217,12 @@ window.Pages=window.Pages||{};
         12:[{t:'Newsletter: May Updates',c:'purple'}],
         16:[{t:'Sports Day — Hebron',c:'green'}],
         18:[{t:'Fees run generated',c:'orange'}],
-        20:[{t:"Principal's Meeting",c:'orange'},{t:'Gr R outing forms due',c:'teal'}],
-        22:[{t:'Sports Day — all branches',c:'green'}],
-        24:[{t:'Parent Workshop',c:'purple'}],
+        20:[{t:"Principals' Meeting",c:'orange'},{t:'Gr R outing forms due',c:'teal'}],
+        22:[{t:'Sports Day — Soshanguve 1',c:'green'}],
+        24:[{t:'Parent Workshop — Mamelodi',c:'purple'}],
         26:[{t:'Planetarium trip — Gr R',c:'blue'}],
         28:[{t:'Mid Term Break begins',c:'red'}]};
+      DB.customCal.forEach(ev=>{ (evByDay[ev.day]=evByDay[ev.day]||[]).push({t:ev.t,c:ev.c}); });
       const tone={orange:['var(--orange-100)','var(--orange-700)'],green:['var(--green-100)','var(--green-700)'],
         purple:['var(--purple-100)','var(--purple-700)'],blue:['var(--blue-100)','var(--blue-600)'],
         teal:['var(--teal-100)','var(--teal-600)'],red:['var(--red-100)','var(--red-600)']};
@@ -164,7 +240,7 @@ window.Pages=window.Pages||{};
         </div>`;
       }
       return `
-        ${UI.pageHead('Calendar','A single calendar across the platform — filter to any school or branch.',
+        ${UI.pageHead('Calendar','One calendar across all campuses — from sports days to term breaks.',
           `<button class="select" id="calMonth">${MCIcon('calendar')} May 2026 ${MCIcon('chevDown')}</button>
            <button class="btn btn-primary" id="addEvent">${MCIcon('plus')} Add Event</button>`)}
         <div class="grid" style="grid-template-columns:2.4fr 1fr" id="calWrap">
@@ -191,16 +267,29 @@ window.Pages=window.Pages||{};
       });
       root.querySelector('#addEvent').addEventListener('click',()=>UI.modal({
         title:'Add Event',
-        body:`<div class="field"><label>Event name</label><input type="text" placeholder="e.g. Sports Day"></div>
+        body:`<div class="field"><label>Event name</label><input type="text" data-f="name" placeholder="e.g. Sports Day"></div>
           <div class="form-row">
-            <div class="field"><label>Date</label><input type="text" value="May 22, 2026"></div>
-            <div class="field"><label>Time</label><input type="text" placeholder="08:00"></div>
+            <div class="field"><label>Day (May 2026)</label><input type="number" data-f="day" value="25" min="1" max="31"></div>
+            <div class="field"><label>Time</label><input type="text" data-f="time" value="08:00 AM"></div>
           </div>
-          <div class="field"><label>Audience</label><select><option>Entire platform</option><option>Specific school</option><option>Specific branch</option><option>Specific grade</option><option>Specific class</option></select></div>`,
+          <div class="form-row">
+            <div class="field"><label>Audience</label><select data-f="aud"><option>All campuses</option>${DB.liveBranches().map(b=>`<option>${esc(b.name)}</option>`).join('')}</select></div>
+            <div class="field"><label>Category</label><select data-f="cat"><option value="green">School event</option><option value="orange">Meeting</option><option value="purple">Parent engagement</option><option value="blue">Trip / outing</option><option value="red">Holiday / closure</option></select></div>
+          </div>`,
         foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" data-s>Create Event</button>`,
         mount(r,close){
           r.querySelector('[data-x]').addEventListener('click',close);
-          r.querySelector('[data-s]').addEventListener('click',()=>{close();UI.toast('Event created and pushed to parent apps');});
+          r.querySelector('[data-s]').addEventListener('click',()=>{
+            const v=UI.formVals(r);
+            const day=Math.min(31,Math.max(1,+v.day||25));
+            if(!v.name){UI.toast('Give the event a name first','alert');return;}
+            DB.customCal.push({day,t:v.name,c:v.cat});
+            const tints={green:'t-green',orange:'t-orange',purple:'t-purple',blue:'t-blue',red:'t-red'};
+            DB.events.push({mo:'MAY',dy:String(day),name:v.name,sub:v.aud,time:v.time,tint:tints[v.cat],people:0});
+            DB.events.sort((a,b)=>+a.dy-+b.dy);
+            DB.log('Created calendar event',v.name+' — May '+day,'ok');
+            close();UI.toast('Event created and pushed to parent apps');App.refresh();
+          });
         }
       }));
     }

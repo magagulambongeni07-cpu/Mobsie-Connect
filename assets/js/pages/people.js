@@ -25,8 +25,11 @@ window.Pages=window.Pages||{};
           <div class="feed-item"><span class="f-ic t-blue">${MCIcon('homework')}</span><div class="f-txt"><div class="f-main">Homework submitted — Counting to 20</div><div class="f-sub">Yesterday</div></div></div>
           <div class="feed-item"><span class="f-ic t-amber">${MCIcon('gallery')}</span><div class="f-txt"><div class="f-main">Tagged in 4 photos — Sports Day</div><div class="f-sub">May 16</div></div></div>
         </div>`,
-      foot:`<button class="btn btn-ghost">${MCIcon('messages')} Message Parent</button>
-            <button class="btn btn-primary">${MCIcon('reports')} View Full Report</button>`,
+      foot:`<button class="btn btn-ghost" data-go="messages">${MCIcon('messages')} Message Parent</button>
+            <button class="btn btn-primary" data-go="reports">${MCIcon('reports')} View Full Report</button>`,
+      mount(root,close){
+        root.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{close();App.go(b.dataset.go);}));
+      }
     });
   }
 
@@ -38,7 +41,7 @@ window.Pages=window.Pages||{};
         pageSize:10, rows, onRow:openLearner,
         columns:[
           {key:'name',label:'Learner',render:r=>UI.personCell(r.name,r.age+' yrs')},
-          {key:'school',label:'School',render:r=>`<div>${esc(r.school)}</div><div class="cell-sub">${esc(r.branch)}</div>`},
+          {key:'branch',label:'Campus'},
           {key:'grade',label:'Class',render:r=>`${esc(r.grade)} ${esc(r.cls)}`},
           {key:'parent',label:'Parent'},
           {key:'attendance',label:'Attendance',render:r=>`<div style="display:flex;align-items:center;gap:10px;min-width:120px"><span class="meter"><i style="width:${r.attendance}%"></i></span><b style="font-variant-numeric:tabular-nums">${r.attendance}%</b></div>`},
@@ -48,11 +51,11 @@ window.Pages=window.Pages||{};
       });
       Pages.learners._tid=UI.lastTableId();
       return `
-        ${UI.pageHead('Learners','Every enrolled child on the platform — profiles, attendance and fees at a glance.',
-          `<button class="btn btn-ghost">${MCIcon('upload')} Bulk Import</button>
-           <button class="btn btn-primary">${MCIcon('plus')} Enrol Learner</button>`)}
+        ${UI.pageHead('Learners','Every enrolled child across your campuses — profiles, attendance and fees at a glance.',
+          `<button class="btn btn-ghost" id="lImport">${MCIcon('upload')} Bulk Import</button>
+           <button class="btn btn-primary" id="lEnrol">${MCIcon('plus')} Enrol Learner</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
-          ${UI.statCard({icon:'learners',tint:'t-purple',label:'Total Learners',value:F(DB.totals.students),deltaHtml:UI.delta(0,'up','this month').replace('0%','1,257')})}
+          ${UI.statCard({icon:'learners',tint:'t-purple',label:'Total Learners',value:F(DB.totals.students),deltaHtml:UI.delta(0,'up','this month').replace('0%','42')})}
           ${UI.statCard({icon:'check',tint:'t-green',label:'Enrolled & Active',value:Math.round(enrolled/rows.length*100)+'%',deltaHtml:`<span class="delta flat">of visible sample</span>`})}
           ${UI.statCard({icon:'attendance',tint:'t-orange',label:'Avg Attendance',value:'92%',deltaHtml:UI.delta(4.3,'up','vs last month')})}
           ${UI.statCard({icon:'payments',tint:'t-blue',label:'Fees Collected',value:'87%',deltaHtml:UI.delta(2.1,'up','vs last month')})}
@@ -64,7 +67,36 @@ window.Pages=window.Pages||{};
           <div class="card-body" style="padding:0;padding-top:8px">${tbl}</div>
         </div>`;
     },
-    mount(root){ root.querySelector('#lQ').addEventListener('input',e=>UI.tableFilter(Pages.learners._tid,e.target.value)); }
+    mount(root){
+      root.querySelector('#lQ').addEventListener('input',e=>UI.tableFilter(Pages.learners._tid,e.target.value));
+      root.querySelector('#lImport').addEventListener('click',()=>UI.toast('Drop an Excel file to import learners — template downloaded'));
+      root.querySelector('#lEnrol').addEventListener('click',()=>UI.modal({
+        title:'Enrol Learner',
+        body:`<div class="form-row">
+            <div class="field"><label>Child's name</label><input type="text" data-f="name" placeholder="Full name"></div>
+            <div class="field"><label>Age</label><input type="number" data-f="age" placeholder="e.g. 4"></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Campus</label><select data-f="branch">${DB.liveBranches().map(b=>`<option>${esc(b.name)}</option>`).join('')}</select></div>
+            <div class="field"><label>Class</label><select data-f="grade">${DB.GRADES.map(g=>`<option>${g}</option>`).join('')}</select></div>
+          </div>
+          <div class="field"><label>Parent / guardian</label><select data-f="parent">${DB.parents.slice(0,20).map(p=>`<option>${esc(p.name)}</option>`).join('')}</select></div>`,
+        foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" data-s>Enrol Learner</button>`,
+        mount(r,close){
+          r.querySelector('[data-x]').addEventListener('click',close);
+          r.querySelector('[data-s]').addEventListener('click',()=>{
+            const v=UI.formVals(r);
+            if(!v.name){UI.toast('Enter the child\'s name first','alert');return;}
+            DB.learners.unshift({id:'l-'+Date.now(),name:v.name,school:DB.SCHOOL_NAME,schoolId:'sch-1',
+              branch:v.branch,grade:v.grade,cls:'A',parent:v.parent,age:+v.age||4,attendance:100,
+              fees:'Paid',status:'Enrolled'});
+            const b=DB.branches.find(x=>x.name===v.branch); if(b) b.students++;
+            DB.log('Enrolled learner',v.name+' — '+v.branch,'ok');
+            close();UI.toast(v.name+' enrolled at '+v.branch+' 🎉');App.refresh();
+          });
+        }
+      }));
+    }
   };
 
   /* ---------- Parents ---------- */
@@ -90,8 +122,11 @@ window.Pages=window.Pages||{};
         ${UI.meterRow('App opens',86,'purple')}
         ${UI.meterRow('Messages read',94)}
         ${UI.meterRow('Payments on time',p.balance?58:98,p.balance?'amber':'')}`,
-      foot:`<button class="btn btn-ghost">${MCIcon('invoices')} Statement</button>
-            <button class="btn btn-primary">${MCIcon('messages')} Send Message</button>`,
+      foot:`<button class="btn btn-ghost" data-go="statements">${MCIcon('invoices')} Statement</button>
+            <button class="btn btn-primary" data-go="messages">${MCIcon('messages')} Send Message</button>`,
+      mount(root,close){
+        root.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{close();App.go(b.dataset.go);}));
+      }
     });
   }
 
@@ -103,7 +138,7 @@ window.Pages=window.Pages||{};
         pageSize:10, rows, onRow:openParent,
         columns:[
           {key:'name',label:'Parent',render:r=>UI.personCell(r.name,r.email)},
-          {key:'school',label:'School',render:r=>`<div>${esc(r.school)}</div><div class="cell-sub">${esc(r.branch)}</div>`},
+          {key:'branch',label:'Campus'},
           {key:'children',label:'Children',num:true},
           {key:'phone',label:'Phone'},
           {key:'balance',label:'Balance',num:true,render:r=>r.balance?`<b style="color:var(--red-600)">${R(r.balance)}</b>`:`<span style="color:var(--green-600);font-weight:650">R0</span>`},
@@ -114,13 +149,13 @@ window.Pages=window.Pages||{};
       Pages.parents._tid=UI.lastTableId();
       return `
         ${UI.pageHead('Parents','Families using the Mobsie Connect app — accounts, balances and engagement.',
-          `<button class="btn btn-ghost">${MCIcon('campaigns')} Email All</button>
-           <button class="btn btn-primary">${MCIcon('plus')} Add Parent</button>`)}
+          `<button class="btn btn-ghost" id="pEmailAll">${MCIcon('campaigns')} Email All</button>
+           <button class="btn btn-primary" id="pAdd">${MCIcon('plus')} Add Parent</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
-          ${UI.statCard({icon:'parents',tint:'t-blue',label:'Total Parents',value:F(DB.totals.parents),deltaHtml:UI.delta(0,'up','this month').replace('0%','968')})}
+          ${UI.statCard({icon:'parents',tint:'t-blue',label:'Total Parents',value:F(DB.totals.parents),deltaHtml:UI.delta(0,'up','this month').replace('0%','31')})}
           ${UI.statCard({icon:'push',tint:'t-purple',label:'App Adoption',value:'94%',deltaHtml:UI.delta(1.2,'up','vs last month')})}
-          ${UI.statCard({icon:'alert',tint:'t-red',label:'Accounts in Arrears',value:F(684),deltaHtml:UI.delta(3.4,'down','improving')})}
-          ${UI.statCard({icon:'heart',tint:'t-green',label:'Satisfaction (CSAT)',value:'4.6/5',deltaHtml:`<span class="delta flat">from 2,318 ratings</span>`})}
+          ${UI.statCard({icon:'alert',tint:'t-red',label:'Accounts in Arrears',value:F(38),deltaHtml:UI.delta(3.4,'down','improving')})}
+          ${UI.statCard({icon:'heart',tint:'t-green',label:'Satisfaction (CSAT)',value:'4.6/5',deltaHtml:`<span class="delta flat">from 412 ratings</span>`})}
         </div>
         <div class="card">
           <div class="card-head"><div><h3>Parent directory</h3></div><span class="spacer"></span>
@@ -128,7 +163,32 @@ window.Pages=window.Pages||{};
           <div class="card-body" style="padding:0;padding-top:8px">${tbl}</div>
         </div>`;
     },
-    mount(root){ root.querySelector('#pQ').addEventListener('input',e=>UI.tableFilter(Pages.parents._tid,e.target.value)); }
+    mount(root){
+      root.querySelector('#pQ').addEventListener('input',e=>UI.tableFilter(Pages.parents._tid,e.target.value));
+      root.querySelector('#pEmailAll').addEventListener('click',()=>App.go('campaigns'));
+      root.querySelector('#pAdd').addEventListener('click',()=>UI.modal({
+        title:'Add Parent',
+        body:`<div class="field"><label>Full name</label><input type="text" data-f="name" placeholder="Full name"></div>
+          <div class="form-row">
+            <div class="field"><label>Email</label><input type="email" data-f="email" placeholder="name@email.com"></div>
+            <div class="field"><label>Phone</label><input type="text" data-f="phone" placeholder="0xx xxx xxxx"></div>
+          </div>
+          <div class="field"><label>Campus</label><select data-f="branch">${DB.liveBranches().map(b=>`<option>${esc(b.name)}</option>`).join('')}</select></div>`,
+        foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" data-s>Add & Send App Invite</button>`,
+        mount(r,close){
+          r.querySelector('[data-x]').addEventListener('click',close);
+          r.querySelector('[data-s]').addEventListener('click',()=>{
+            const v=UI.formVals(r);
+            if(!v.name){UI.toast('Enter the parent\'s name first','alert');return;}
+            DB.parents.unshift({id:'p-'+Date.now(),name:v.name,email:v.email||DB.email(v.name),
+              phone:v.phone||DB.phone(),school:DB.SCHOOL_NAME,schoolId:'sch-1',branch:v.branch,
+              children:0,balance:0,status:'Active',joined:'May 2026'});
+            DB.log('Added parent',v.name+' — '+v.branch,'ok');
+            close();UI.toast('Parent added — Mobsie app invite sent');App.refresh();
+          });
+        }
+      }));
+    }
   };
 
   /* ---------- Teachers ---------- */
@@ -153,8 +213,11 @@ window.Pages=window.Pages||{};
           <div class="feed-item"><span class="f-ic t-blue">${MCIcon('homework')}</span><div class="f-txt"><div class="f-main">3 homework activities posted</div><div class="f-sub">Numbers, shapes & story time</div></div></div>
           <div class="feed-item"><span class="f-ic t-amber">${MCIcon('gallery')}</span><div class="f-txt"><div class="f-main">18 photos shared to class gallery</div><div class="f-sub">Approved by principal</div></div></div>
         </div>`,
-      foot:`<button class="btn btn-ghost">${MCIcon('messages')} Message</button>
-            <button class="btn btn-primary">${MCIcon('external')} Open Classroom</button>`,
+      foot:`<button class="btn btn-ghost" data-go="messages">${MCIcon('messages')} Message</button>
+            <button class="btn btn-primary" data-go="attendance">${MCIcon('external')} Open Classroom</button>`,
+      mount(root,close){
+        root.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{close();App.go(b.dataset.go);}));
+      }
     });
   }
 
@@ -165,7 +228,7 @@ window.Pages=window.Pages||{};
         pageSize:10, rows, onRow:openTeacher,
         columns:[
           {key:'name',label:'Teacher',render:r=>UI.personCell(r.name,r.email)},
-          {key:'school',label:'School',render:r=>`<div>${esc(r.school)}</div><div class="cell-sub">${esc(r.branch)}</div>`},
+          {key:'branch',label:'Campus'},
           {key:'cls',label:'Class'},
           {key:'students',label:'Learners',num:true},
           {key:'years',label:'Experience',num:true,render:r=>r.years+' yrs'},
@@ -175,12 +238,12 @@ window.Pages=window.Pages||{};
       });
       Pages.teachers._tid=UI.lastTableId();
       return `
-        ${UI.pageHead('Teachers','Teaching staff across all schools — classes, ratings and workload.',
-          `<button class="btn btn-ghost">${MCIcon('download')} Export</button>
-           <button class="btn btn-primary">${MCIcon('plus')} Add Teacher</button>`)}
+        ${UI.pageHead('Teachers','Teaching staff across all campuses — classes, ratings and workload.',
+          `<button class="btn btn-ghost" id="tExp">${MCIcon('download')} Export</button>
+           <button class="btn btn-primary" id="tAdd">${MCIcon('plus')} Add Teacher</button>`)}
         <div class="grid cards-4" style="margin-bottom:20px">
-          ${UI.statCard({icon:'teachers',tint:'t-teal',label:'Total Teachers',value:F(DB.totals.teachers),deltaHtml:UI.delta(0,'up','this month').replace('0%','120')})}
-          ${UI.statCard({icon:'learners',tint:'t-purple',label:'Avg Class Size',value:'19',deltaHtml:`<span class="delta flat">across all branches</span>`})}
+          ${UI.statCard({icon:'teachers',tint:'t-teal',label:'Total Teachers',value:F(DB.totals.teachers),deltaHtml:UI.delta(0,'up','this month').replace('0%','4')})}
+          ${UI.statCard({icon:'learners',tint:'t-purple',label:'Avg Class Size',value:'16',deltaHtml:`<span class="delta flat">across all campuses</span>`})}
           ${UI.statCard({icon:'star',tint:'t-amber',label:'Avg Parent Rating',value:'4.5',deltaHtml:UI.delta(0.2,'up','vs last term').replace('0.2%','0.2')})}
           ${UI.statCard({icon:'attendance',tint:'t-green',label:'Registers On Time',value:'97%',deltaHtml:UI.delta(1.1,'up','vs last month')})}
         </div>
@@ -190,6 +253,34 @@ window.Pages=window.Pages||{};
           <div class="card-body" style="padding:0;padding-top:8px">${tbl}</div>
         </div>`;
     },
-    mount(root){ root.querySelector('#tQ').addEventListener('input',e=>UI.tableFilter(Pages.teachers._tid,e.target.value)); }
+    mount(root){
+      root.querySelector('#tQ').addEventListener('input',e=>UI.tableFilter(Pages.teachers._tid,e.target.value));
+      root.querySelector('#tExp').addEventListener('click',()=>UI.downloadCSV('mobsie-teachers.csv',
+        ['Teacher','Email','Campus','Class','Learners','Experience (yrs)','Rating','Status'],
+        DB.teachers.map(t=>[t.name,t.email,t.branch,t.cls,t.students,t.years,t.rating,t.status])));
+      root.querySelector('#tAdd').addEventListener('click',()=>UI.modal({
+        title:'Add Teacher',
+        body:`<div class="field"><label>Full name</label><input type="text" data-f="name" placeholder="Full name"></div>
+          <div class="form-row">
+            <div class="field"><label>Campus</label><select data-f="branch">${DB.liveBranches().map(b=>`<option>${esc(b.name)}</option>`).join('')}</select></div>
+            <div class="field"><label>Class</label><select data-f="grade">${DB.GRADES.map(g=>`<option>${g}</option>`).join('')}</select></div>
+          </div>
+          <div class="field"><label>Email</label><input type="email" data-f="email" placeholder="name@mobsie.co.za"></div>`,
+        foot:`<button class="btn btn-ghost" data-x>Cancel</button><button class="btn btn-primary" data-s>Add & Invite</button>`,
+        mount(r,close){
+          r.querySelector('[data-x]').addEventListener('click',close);
+          r.querySelector('[data-s]').addEventListener('click',()=>{
+            const v=UI.formVals(r);
+            if(!v.name){UI.toast('Enter the teacher\'s name first','alert');return;}
+            DB.teachers.unshift({id:'t-'+Date.now(),name:v.name,email:v.email||DB.email(v.name),phone:DB.phone(),
+              school:DB.SCHOOL_NAME,schoolId:'sch-1',branch:v.branch,grade:v.grade,cls:v.grade+' A',
+              students:0,years:0,rating:'—',status:'Active'});
+            const b=DB.branches.find(x=>x.name===v.branch); if(b) b.teachers++;
+            DB.log('Added teacher',v.name+' — '+v.branch,'ok');
+            close();UI.toast(v.name+' added — classroom invite sent');App.refresh();
+          });
+        }
+      }));
+    }
   };
 })();
