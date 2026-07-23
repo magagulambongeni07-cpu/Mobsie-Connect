@@ -1,97 +1,64 @@
 # Mobsie Connect — Control Centre
 
-An enterprise-grade **school management platform**, built to the standard of HubSpot, Stripe,
-Linear and Google Workspace Admin — with the friendly orange / green / purple identity of the
-Mobsie Connect mobile app.
+An enterprise-grade **school management platform**, built to the standard of
+HubSpot, Stripe, Linear and Google Workspace Admin — with the friendly orange /
+green / purple identity of the Mobsie Connect mobile app.
 
-Seeded with the real school structure: **5 live campuses** — Soshanguve Branch 1 & 2 and
-Mamelodi (Pretoria), Cosmo City–Randburg and Sky-City–Alberton (Johannesburg) — plus an
-expansion pipeline for **Atteridgeville, Soweto and Thembisa**. The school group's name is a
-single constant (`SCHOOL_NAME` in `assets/js/data.js`) — change it once and it flows everywhere.
+This is a **Next.js frontend running on mock data** — no backend, no database.
+Everything runs in the browser and persists to `localStorage`.
 
-**Fully interactive**: every button performs a real action against the demo data — approve or
-reject applications, schedule interviews, open a new campus, enrol learners, mark invoices paid,
-retry failed payments, restock the shop, resolve support tickets, send newsletters/push/SMS,
-toggle RBAC permissions, download real CSV exports. Changes persist in your browser
-(localStorage) and can be cleared with **Settings → Reset Demo Data**.
+Seeded with the real school structure: **5 live campuses** — Soshanguve Branch 1
+& 2 and Mamelodi (Pretoria), Cosmo City–Randburg and Sky-City–Alberton
+(Johannesburg) — plus an expansion pipeline for **Atteridgeville, Soweto and
+Thembisa**. The school group's name is one constant (`SCHOOL_NAME` in
+`components/legacy/data.js`).
 
-**Open `index.html` in any browser. No build step, no dependencies, no server required.**
-
-```
-python3 -m http.server 8000   # optional — file:// works too
-```
-
-## Backend API (full-stack mode)
-
-The repo now includes a real backend for the platform — the same one the
-Mobsie mobile app talks to:
+## Run it
 
 ```bash
-cd server
-cp .env.example .env    # set your own secrets
 npm install
-npm start               # → http://localhost:4000
+npm run dev            # http://localhost:3000
 ```
 
-With the API running, the Control Centre auto-connects (look for the
-**"Connected to Mobsie API"** toast), loads live data from the server and syncs
-every change back — the web app and the mobile app share one source of truth.
-Node 18+ · Express · JWT auth with roles (staff + parents) · bcrypt passwords ·
-JSON-file store designed to be swapped for Postgres.
+Static production build (host the `out/` folder anywhere):
 
-- **`docs/HANDOVER.md`** — developer onboarding: run it, architecture, how to
-  link the mobile app, production checklist.
-- **`docs/API.md`** — full endpoint reference with curl examples: parent
-  endpoints (`/api/me/*`), public admission applications (`/api/apply`),
-  staff CRUD for every module, and domain actions (approve application,
-  mark invoice paid, restock, resolve ticket…).
+```bash
+npm run build          # → ./out
+npx serve out          # preview locally
+```
 
 ## What's inside
 
 | Area | Pages |
 |---|---|
-| Executive | Dashboard (KPIs, revenue vs MRR, application donut, attendance, activity, leaderboard, events, growth, system health) |
-| Platform | Schools directory (cards, plans, quick actions, drawer with subscription & branches), Branches |
+| Executive | Dashboard (KPIs, fees vs last month, application donut, attendance, activity, campus leaderboard, events, growth, system health) |
+| Platform | Our School (campus cards + expansion pipeline), Branches |
 | Admissions | Applications (funnel + pipeline tabs), Interviews, Waiting List |
-| Students | Learners, Parents, Teachers — directories with profile drawers |
-| Academics | Attendance (ring + heatmap + branch table), Homework, Reports, Calendar |
+| Students | Learners, Parents, Teachers |
+| Academics | Attendance (ring + heatmap), Homework, Reports, Calendar |
 | Finance | Payments, Invoices, Statements & payouts, Discounts |
-| Communications | Messages (live chat), Newsletters, Push, SMS, Email Campaigns, Feedback Centre |
+| Communications | Messages (live chat), Newsletters, Push, SMS, Email Campaigns, Feedback |
 | Media & Shop | Gallery albums, Media Library, Products, Orders, Inventory |
 | Insights | Analytics, Documents |
 | Operations | Support Tickets, Users, Roles & Permissions (clickable RBAC matrix), Audit Logs |
-| System | Settings — General, **White Label branding with live preview**, Billing plans, Notifications, Integrations, Security |
+| System | Settings — General, White Label branding (live preview), Billing, Notifications, Integrations, Security |
 
-## Product model
+## Fully interactive
 
-Hierarchy: **Platform → School → Campuses (branches) → Teachers → Classes → Parents → Learners.**
-The architecture stays multi-tenant-ready (unlimited campuses per school), while the data reflects
-the real 5-campus school group. The top-bar **campus switcher** jumps into any campus instantly —
-every scoped page re-filters live.
+Every button performs a real action against the mock data — approve or reject
+applications, schedule interviews, open a new campus, enrol learners, mark
+invoices paid, retry payments, restock the shop, resolve tickets, send
+newsletters/push/SMS, toggle RBAC permissions, download CSV exports. Changes
+persist in the browser; **Settings → Reset Demo Data** restores the seed.
 
-Roles: Super Admin, School Owner, Branch Principal, Finance Manager, Admissions, Teacher, Parent
-(mobile app) — enforced visually through the Roles & Permissions matrix.
+Plus: **⌘K / Ctrl-K global search**, a campus switcher, sortable/paginated
+tables, record drawers, modals, and dependency-free SVG charts with tooltips.
 
-## Interactions that work
+## Tech
 
-- **⌘K / Ctrl-K global search** across schools, branches, people, invoices, documents and tickets
-- Sortable, paginated, searchable data tables everywhere
-- Record drawers (schools, branches, learners, parents, teachers, applications, payments, tickets…)
-- Modals for create flows, dropdown menus, toasts, tab groups, toggles
-- Chart tooltips with crosshairs; RBAC matrix cells toggle on click; chat sends replies
+Next.js (App Router) · React · plain CSS design system · zero runtime
+dependencies beyond React/Next. Static-exportable (`output: 'export'`).
 
-## Architecture
-
-```
-index.html
-assets/css/mobsie.css        design tokens + component library (~1 file, responsive to ultra-wide)
-assets/js/icons.js           inline SVG icon set
-assets/js/data.js            seeded deterministic demo data (128 schools, 380+ branches, ZAR)
-assets/js/charts.js          dependency-free SVG charts: line, donut, ring, bars, spark, funnel, heatmap
-assets/js/ui.js              shared components: stat tiles, tables, drawers, modals, menus, badges
-assets/js/app.js             shell: sidebar, topbar, hash router, school switcher, global search
-assets/js/pages/*.js         one module per sidebar section
-```
-
-Chart colours follow a fixed categorical order (`#EA580C → #7C3AED → #16A34A → #2563EB`) validated
-for colour-vision-deficiency separation and contrast on white.
+See **`docs/HANDOVER.md`** for the developer guide (architecture, how the pages
+render, how to migrate a page to idiomatic React, how to add a real backend
+later).

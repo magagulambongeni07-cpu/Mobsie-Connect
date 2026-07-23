@@ -1,7 +1,9 @@
-/* Mobsie Connect — app shell: sidebar, topbar, router, global search */
+/* Mobsie Connect — app core: sidebar, topbar, page host, global search,
+   chart tooltips. Booted by React (AppShell) rather than auto-running; routing
+   goes through Next.js via window.__mobsieNavigate. */
 (function(){
   const $=(s,r)=>(r||document).querySelector(s);
-  const esc=UI.esc;
+  const esc=s=>window.UI.esc(s);
 
   const NAV=[
     {items:[{route:'dashboard',label:'Dashboard',icon:'dashboard',accent:true}]},
@@ -54,11 +56,10 @@
   const App={
     ctx:{school:null,branch:null},
     route:'dashboard',
-    go(r){ location.hash='#/'+r; },
+    go(r){ if(window.__mobsieNavigate) window.__mobsieNavigate(r); else setRoute(r); },
     school(){ return this.ctx.school?DB.schools.find(s=>s.id===this.ctx.school):null; },
     branchObj(){ return this.ctx.branch?DB.branches.find(b=>b.id===this.ctx.branch):null; },
     scopeLabel(){ const s=this.school(); return s?s.name:(DB.schools.length===1?DB.schools[0].name:'All Schools'); },
-    // Filter helper — rows carrying schoolId / school name fields
     scoped(rows){
       const s=this.school(); if(!s) return rows;
       const b=this.branchObj();
@@ -74,7 +75,7 @@
   /* ---- Sidebar ---- */
   const LOGO=`<svg class="mark" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="19" fill="#F97316"/><circle cx="41" cy="25" r="12" fill="#22C55E"/><circle cx="25" cy="39" r="12" fill="#fff"/><circle cx="41" cy="25" r="5" fill="#fff" opacity=".35"/></svg>`;
   function renderSidebar(){
-    const sb=$('#sidebar');
+    const sb=$('#sidebar'); if(!sb) return;
     sb.innerHTML=`
       <div class="side-logo">${LOGO}<div><div class="name">Mobsie Connect</div><div class="sub">Control Centre</div></div></div>
       <nav class="side-nav">${NAV.map(g=>
@@ -82,12 +83,16 @@
         g.items.map(it=>{
           const b=typeof it.badge==='function'?it.badge():it.badge;
           return `
-          <a class="side-item ${App.route===it.route?'active':''}" href="#/${it.route}" data-route="${it.route}">
+          <a class="side-item ${App.route===it.route?'active':''}" href="/${it.route}" data-route="${it.route}">
             ${MCIcon(it.icon)}<span>${esc(it.label)}</span>
             ${b?`<span class="side-badge">${b}</span>`:(it.accent&&App.route===it.route?MCIcon('chevDown','chev'):'')}
           </a>`;}).join('')
       ).join('')}</nav>
       <div class="side-foot"><div class="help-pill" id="helpPill"><span class="q">?</span> Help Centre</div></div>`;
+    // Intercept nav clicks → Next router (no full page reload)
+    sb.querySelectorAll('.side-item').forEach(a=>a.addEventListener('click',e=>{
+      e.preventDefault(); App.go(a.dataset.route);
+    }));
     $('#helpPill').addEventListener('click',()=>UI.toast('Help Centre opens in a new tab in the full build','info'));
   }
   function markActive(){
@@ -99,19 +104,19 @@
   /* ---- Topbar ---- */
   const NOTIFS=[
     {icon:'applications',tint:'t-orange',t:'Applications awaiting review',s:'Admissions · today',go:'applications'},
-    {icon:'alert',tint:'t-red',t:'Payment failed — Rainbow Bridge Academy',s:'Billing · 32m ago',go:'payments'},
+    {icon:'alert',tint:'t-red',t:'Payment failed — retry needed',s:'Billing · 32m ago',go:'payments'},
     {icon:'support',tint:'t-purple',t:'2 urgent support tickets open',s:'Support · 1h ago',go:'support'},
-    {icon:'school',tint:'t-green',t:'New school onboarded: Dinaledi Educare',s:'Platform · 3h ago',go:'schools'},
-    {icon:'server',tint:'t-blue',t:'Nightly backup completed in 4m 12s',s:'System · 02:00',go:'audit'},
+    {icon:'school',tint:'t-green',t:'Atteridgeville campus onboarding',s:'Expansion · 3h ago',go:'schools'},
+    {icon:'server',tint:'t-blue',t:'Nightly backup completed in 1m 42s',s:'System · 02:00',go:'audit'},
   ];
   function renderTopbar(){
-    const tb=$('#topbar');
+    const tb=$('#topbar'); if(!tb) return;
     const pageTitle=findNav(App.route)?.label||'Dashboard';
     const br=App.branchObj();
     tb.innerHTML=`
       <button class="tb-burger" id="tbBurger" aria-label="Toggle navigation">${MCIcon('menu')}</button>
       <div class="tb-title">${esc(pageTitle)}</div>
-      <div class="tb-search" id="tbSearch">${MCIcon('search')}<span>Search for schools, branches, students, parents…</span><span class="hint">⌘K</span></div>
+      <div class="tb-search" id="tbSearch">${MCIcon('search')}<span>Search for campuses, learners, parents, invoices…</span><span class="hint">⌘K</span></div>
       <div class="tb-right">
         <button class="tb-select" id="selSchool"><span class="ic orange">${MCIcon('school')}</span>${esc(App.scopeLabel())} ${MCIcon('chevDown','chev')}</button>
         <button class="tb-select" id="selBranch"><span class="ic green">${MCIcon('branches')}</span>${esc(br?br.name:'All Branches')} ${MCIcon('chevDown','chev')}</button>
@@ -155,18 +160,13 @@
     return null;
   }
 
-  /* ---- Router ---- */
-  function currentRoute(){
-    const h=location.hash.replace(/^#\/?/,'');
-    return h&&window.Pages[h]?h:'dashboard';
-  }
+  /* ---- Render / route ---- */
   function rerender(){
     renderSidebar();
     markActive();
     renderTopbar();
     renderPage();
   }
-  // Re-render the current view after a data mutation, then persist it.
   App.refresh=function(){
     DB.recount();
     rerender();
@@ -174,16 +174,15 @@
   };
   function renderPage(){
     const page=window.Pages[App.route];
-    const c=$('#content');
+    const c=$('#content'); if(!c||!page) return;
     c.innerHTML=page.render();
     UI.hydrate(c);
     if(page.mount) page.mount(c);
     c.scrollTop=0; window.scrollTo(0,0);
   }
-  function onRoute(){
-    App.route=currentRoute();
-    $('#app').classList.remove('side-open');
-    markActive();
+  function setRoute(route){
+    App.route=(route&&window.Pages[route])?route:'dashboard';
+    const app=$('#app'); if(app) app.classList.remove('side-open');
     rerender();
   }
 
@@ -202,11 +201,11 @@
   }
   let _ix=null,_sel=0;
   function openSearch(){
-    _ix=_ix||searchIndex();
+    _ix=searchIndex();
     const ov=$('#searchOverlay');
     ov.hidden=false;
     ov.innerHTML=`<div class="search-panel">
-      <div class="search-input-row">${MCIcon('search')}<input id="gsInput" placeholder="Search schools, branches, people, invoices, documents…" autocomplete="off"><span class="esc">ESC</span></div>
+      <div class="search-input-row">${MCIcon('search')}<input id="gsInput" placeholder="Search campuses, people, invoices, documents…" autocomplete="off"><span class="esc">ESC</span></div>
       <div class="search-results" id="gsResults"></div></div>`;
     const input=$('#gsInput');
     renderResults('');
@@ -219,7 +218,7 @@
     q=q.trim().toLowerCase();
     let hits=q?_ix.filter(i=>(i.nm+' '+i.sub+' '+i.kind).toLowerCase().includes(q)).slice(0,12)
              :_ix.slice(0,3).concat(_ix.filter(i=>i.kind==='Teacher').slice(0,2),_ix.filter(i=>i.kind==='Parent').slice(0,2));
-    if(!hits.length){ res.innerHTML=`<div class="sr-empty">No results for “${esc(q)}”. Try a school, parent or invoice number.</div>`; return; }
+    if(!hits.length){ res.innerHTML=`<div class="sr-empty">No results for “${esc(q)}”. Try a campus, parent or invoice number.</div>`; return; }
     let out='',lastKind='';
     hits.forEach((h,i)=>{
       if(h.kind!==lastKind){ out+=`<div class="sr-group">${h.kind}s</div>`; lastKind=h.kind; }
@@ -234,55 +233,63 @@
     }));
     res._hits=hits;
   }
-  function closeSearch(){ const ov=$('#searchOverlay'); ov.hidden=true; ov.innerHTML=''; }
-  document.addEventListener('keydown',e=>{
-    if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); openSearch(); }
-    const ov=$('#searchOverlay');
-    if(!ov.hidden){
-      const res=$('#gsResults');
-      if(e.key==='Escape') closeSearch();
-      else if(e.key==='ArrowDown'){ e.preventDefault(); _sel=Math.min((res._hits||[]).length-1,_sel+1); refreshSel(res); }
-      else if(e.key==='ArrowUp'){ e.preventDefault(); _sel=Math.max(0,_sel-1); refreshSel(res); }
-      else if(e.key==='Enter'&&res._hits&&res._hits[_sel]){ const h=res._hits[_sel]; closeSearch(); App.go(h.route); }
-    } else if(e.key==='Escape'){ UI.closeMenu(); }
-  });
+  function closeSearch(){ const ov=$('#searchOverlay'); if(ov){ov.hidden=true; ov.innerHTML='';} }
   function refreshSel(res){ res.querySelectorAll('.sr-item').forEach((el,i)=>el.classList.toggle('sel',i===_sel)); }
 
-  /* ---- Chart tooltip delegation ---- */
-  const tipEl=$('#chartTip');
-  document.addEventListener('mouseover',e=>{
-    const hit=e.target.closest&&e.target.closest('.ct-hit');
-    if(hit&&hit.dataset.tip){
-      try{
-        const d=JSON.parse(decodeURIComponent(hit.dataset.tip));
-        tipEl.innerHTML=`<div class="tt-h">${esc(d.h)}</div>`+
-          d.rows.map(r=>`<div class="tt-r"><span class="sw" style="background:${r.c}"></span>${esc(r.l)}<b>${esc(r.v)}</b></div>`).join('');
-        tipEl.hidden=false;
-      }catch(_){}
-    }
-  });
-  document.addEventListener('mousemove',e=>{
-    if(!tipEl.hidden){
+  /* ---- Global listeners (wired once) ---- */
+  let wired=false;
+  function wireOnce(){
+    if(wired) return; wired=true;
+
+    document.addEventListener('keydown',e=>{
+      if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); openSearch(); }
+      const ov=$('#searchOverlay');
+      if(ov&&!ov.hidden){
+        const res=$('#gsResults');
+        if(e.key==='Escape') closeSearch();
+        else if(e.key==='ArrowDown'){ e.preventDefault(); _sel=Math.min((res._hits||[]).length-1,_sel+1); refreshSel(res); }
+        else if(e.key==='ArrowUp'){ e.preventDefault(); _sel=Math.max(0,_sel-1); refreshSel(res); }
+        else if(e.key==='Enter'&&res._hits&&res._hits[_sel]){ const h=res._hits[_sel]; closeSearch(); App.go(h.route); }
+      } else if(e.key==='Escape'){ UI.closeMenu(); }
+    });
+
+    // Chart tooltip delegation
+    const tipEl=$('#chartTip');
+    document.addEventListener('mouseover',e=>{
       const hit=e.target.closest&&e.target.closest('.ct-hit');
-      if(!hit){ tipEl.hidden=true; return; }
-      const x=Math.max(90,Math.min(e.clientX,innerWidth-90));
-      tipEl.style.left=x+'px'; tipEl.style.top=e.clientY+'px';
-    }
-  });
-  document.addEventListener('mouseout',e=>{
-    if(e.target.closest&&e.target.closest('.ct-hit')&&!(e.relatedTarget&&e.relatedTarget.closest&&e.relatedTarget.closest('.ct-hit')))
-      tipEl.hidden=true;
-  });
-  // crosshair line reveal
-  const st=document.createElement('style');
-  st.textContent='.ct-hit:hover .xh{opacity:1 !important}';
-  document.head.appendChild(st);
+      if(hit&&hit.dataset.tip&&tipEl){
+        try{
+          const d=JSON.parse(decodeURIComponent(hit.dataset.tip));
+          tipEl.innerHTML=`<div class="tt-h">${esc(d.h)}</div>`+
+            d.rows.map(r=>`<div class="tt-r"><span class="sw" style="background:${r.c}"></span>${esc(r.l)}<b>${esc(r.v)}</b></div>`).join('');
+          tipEl.hidden=false;
+        }catch(_){}
+      }
+    });
+    document.addEventListener('mousemove',e=>{
+      if(tipEl&&!tipEl.hidden){
+        const hit=e.target.closest&&e.target.closest('.ct-hit');
+        if(!hit){ tipEl.hidden=true; return; }
+        const x=Math.max(90,Math.min(e.clientX,innerWidth-90));
+        tipEl.style.left=x+'px'; tipEl.style.top=e.clientY+'px';
+      }
+    });
+    document.addEventListener('mouseout',e=>{
+      if(tipEl&&e.target.closest&&e.target.closest('.ct-hit')&&!(e.relatedTarget&&e.relatedTarget.closest&&e.relatedTarget.closest('.ct-hit')))
+        tipEl.hidden=true;
+    });
 
-  /* ---- Scrim ---- */
-  $('#sidebarScrim').addEventListener('click',()=>$('#app').classList.remove('side-open'));
+    const st=document.createElement('style');
+    st.textContent='.ct-hit:hover .xh{opacity:1 !important}';
+    document.head.appendChild(st);
 
-  /* ---- Boot ---- */
-  window.addEventListener('hashchange',onRoute);
-  renderSidebar();
-  onRoute();
+    const scrim=$('#sidebarScrim');
+    if(scrim) scrim.addEventListener('click',()=>$('#app').classList.remove('side-open'));
+  }
+
+  /* ---- Boot entry (called by React) ---- */
+  window.MobsieBoot=function(route){
+    wireOnce();
+    setRoute(route);
+  };
 })();
