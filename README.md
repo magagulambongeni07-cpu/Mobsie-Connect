@@ -35,7 +35,7 @@ npx serve out          # preview locally
 | Platform | Our School (campus cards + expansion pipeline), Branches |
 | Admissions | Applications (funnel + pipeline tabs), Interviews, Waiting List |
 | Students | Learners, Parents, Teachers |
-| Academics | Attendance (ring + heatmap), Homework, Reports, Calendar |
+| Academics | **Daily Activity** (build the parent-app timeline, with live phone preview), Attendance (ring + heatmap), Homework, Reports, Calendar |
 | Finance | Payments, Invoices, Statements & payouts, Discounts |
 | Communications | Messages (live chat), Newsletters, Push, SMS, Email Campaigns, Feedback |
 | Media & Shop | Gallery albums, Media Library, Products, Orders, Inventory |

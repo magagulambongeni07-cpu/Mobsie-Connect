@@ -6,7 +6,7 @@ export const ROUTES = [
   'schools', 'branches',
   'applications', 'interviews', 'waiting-list',
   'learners', 'parents', 'teachers',
-  'attendance', 'homework', 'reports', 'calendar',
+  'daily-activity', 'attendance', 'homework', 'reports', 'calendar',
   'payments', 'invoices', 'statements', 'discounts',
   'messages', 'newsletters', 'push', 'sms', 'campaigns', 'feedback',
   'gallery', 'media',

@@ -331,6 +331,47 @@
     {name:'Expansion Readiness — Atteridgeville',type:'Operations',scope:'Head Office',date:'Due Jun 30',status:'Scheduled',done:0,tint:'t-teal'},
   ];
 
+  /* --- Daily Activity: the timeline parents see in the Mobsie app ---
+     Staff build the day here; each entry is one card on the parent's phone. */
+  const ACTIVITY_KINDS=[
+    {kind:'Drop-off',       icon:'dropoff',  tone:'green'},
+    {kind:'Assembly',       icon:'sun',      tone:'teal'},
+    {kind:'Lesson',         icon:'abacus',   tone:'purple'},
+    {kind:'Snack Break',    icon:'apple',    tone:'orange'},
+    {kind:'Reading',        icon:'book',     tone:'pink'},
+    {kind:'Lunch',          icon:'lunch',    tone:'green'},
+    {kind:'Outdoor Play',   icon:'ball',     tone:'blue'},
+    {kind:'Nap Time',       icon:'moon',     tone:'purple'},
+    {kind:'Creative Art',   icon:'palette',  tone:'pink'},
+    {kind:'Pick-up',        icon:'dropoff',  tone:'teal'},
+  ];
+  // Reusable blocks staff can drop into any day with one click
+  const activityTemplates=[
+    {kind:'Drop-off',    title:'Drop-off',         from:'07:00',to:'08:00',note:'Arrival and free play.'},
+    {kind:'Assembly',    title:'Morning Assembly', from:'08:00',to:'09:00',note:'Songs, greetings and the weather chart.'},
+    {kind:'Lesson',      title:'Mathematics',      from:'09:00',to:'10:30',note:'Counting objects from 1 to 20.'},
+    {kind:'Snack Break', title:'Snack Break',      from:'10:30',to:'11:00',note:'Fruit, yoghurt and water.'},
+    {kind:'Reading',     title:'Reading Time',     from:'11:00',to:'12:00',note:'The Very Hungry Caterpillar.'},
+    {kind:'Lunch',       title:'Lunch',            from:'12:00',to:'13:00',note:'Hot meal and fruit.'},
+    {kind:'Nap Time',    title:'Nap Time',         from:'13:00',to:'14:00',note:'Quiet rest on mats.'},
+    {kind:'Outdoor Play',title:'Outdoor Play',     from:'14:00',to:'15:00',note:'Jungle gym and ball games.'},
+    {kind:'Creative Art',title:'Creative Art',     from:'15:00',to:'15:45',note:'Painting and collage.'},
+    {kind:'Pick-up',     title:'Pick-up',          from:'16:00',to:'17:00',note:'Handover to parents.'},
+  ];
+  // Today's published plan — mirrors the parent app screenshot
+  const dailyPlans=[{
+    id:'dp-1', date:'2026-08-03', branch:'Soshanguve Branch 1', cls:'Nursery',
+    status:'Published', updatedBy:'Naledi Khumalo', updatedAt:'10:38',
+    items:[
+      {id:'da-1',kind:'Drop-off',   title:'Drop-off',        from:'07:00',to:'08:00',note:'Prince arrived and joined free play.'},
+      {id:'da-2',kind:'Assembly',   title:'Morning Assembly',from:'08:00',to:'09:00',note:'Songs, greetings and the weather chart.'},
+      {id:'da-3',kind:'Lesson',     title:'Mathematics',     from:'09:00',to:'10:30',note:'Counting objects from 1 to 20.'},
+      {id:'da-4',kind:'Snack Break',title:'Snack Break',     from:'10:30',to:'11:00',note:'Fruit, yoghurt and water.'},
+      {id:'da-5',kind:'Reading',    title:'Reading Time',    from:'11:00',to:'12:00',note:'The Very Hungry Caterpillar.'},
+      {id:'da-6',kind:'Lunch',      title:'Lunch',           from:'12:00',to:'13:00',note:'Hot meal, fruit and water.'},
+    ],
+  }];
+
   window.DB={rnd,ri,pick,FIRST,LAST,GRADES,AV,SCHOOL_NAME,
     name,initials,avColor,email,phone,fmtN,fmtR,fmtRk,
     schools,branches,liveBranches,totals,teachers,parents,learners,
@@ -340,7 +381,8 @@
     albums,mediaFiles,products,ordersList,
     documentsList,tickets,adminUsers,rolePerms,auditLog,
     revSeries,growthSeries,activity,events,
-    counters,customCal,homeworkList,docFolders,reportRuns};
+    counters,customCal,homeworkList,docFolders,reportRuns,
+    ACTIVITY_KINDS,activityTemplates,dailyPlans};
 
   // Always read live campuses from the current (possibly restored) branch list
   DB.liveBranches=()=>DB.branches.filter(b=>b.status!=='Coming Soon');
@@ -350,8 +392,8 @@
     'interviews','waitingList','payments','invoices','discounts','conversations','newsletters',
     'pushLog','smsLog','campaigns','feedback','albums','mediaFiles','products','ordersList',
     'documentsList','tickets','adminUsers','rolePerms','auditLog','events','counters','customCal',
-    'homeworkList','docFolders','reportRuns'];
-  const PKEY='mobsie-db-v2';
+    'homeworkList','docFolders','reportRuns','activityTemplates','dailyPlans'];
+  const PKEY='mobsie-db-v3';
   DB.save=function(){
     try{
       const o={};

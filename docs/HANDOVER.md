@@ -9,9 +9,32 @@ payments…) is generated in-app and persists to the browser's `localStorage`.
 
 A school-management admin dashboard for **one school group with 5 live
 campuses** (Soshanguve 1 & 2, Mamelodi, Cosmo City–Randburg, Sky-City–Alberton)
-plus an expansion pipeline (Atteridgeville, Soweto, Thembisa). 35 pages:
+plus an expansion pipeline (Atteridgeville, Soweto, Thembisa). 36 pages:
 dashboard, admissions, students, academics, finance, communications, media,
 shop, analytics, documents, support, users, roles, audit, settings.
+
+### Daily Activity → the mobile app
+
+`/daily-activity` is the admin screen that feeds the **Daily Activity timeline
+in the parent app**. Staff pick a campus, class and date, then build the day
+from activity blocks (drop-off, assembly, lessons, snack, reading, lunch, nap,
+outdoor play…), each with a start/end time, a title and a friendly note. The
+right-hand pane is a **live phone preview** rendering exactly what parents see,
+including the "Happening now" card with its progress percentage.
+
+Data shape (in `components/legacy/data.js`):
+
+- `DB.ACTIVITY_KINDS` — the block types, each with an icon and colour tone.
+- `DB.activityTemplates` — reusable blocks powering "Quick add" and
+  "Load Standard Day".
+- `DB.dailyPlans` — `{id, date (YYYY-MM-DD), branch, cls, status, items[]}`
+  where each item is `{id, kind, title, from, to, note}`.
+
+**For the mobile app:** one plan per `branch + cls + date` is the contract. When
+a backend exists, the app would fetch the published plan for the child's class
+and render `items` sorted by `from`; "happening now" is simply the item whose
+`from ≤ now < to`. Publishing also appends to `DB.pushLog`, i.e. the trigger
+point for a real push notification.
 
 The school's display name is one constant — `SCHOOL_NAME` in
 `components/legacy/data.js`. Change it there and it flows through the whole app.

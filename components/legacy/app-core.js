@@ -19,6 +19,7 @@
       {route:'parents',label:'Parents',icon:'parents'},
       {route:'teachers',label:'Teachers',icon:'teachers'}]},
     {section:'Academics',items:[
+      {route:'daily-activity',label:'Daily Activity',icon:'sun'},
       {route:'attendance',label:'Attendance',icon:'attendance'},
       {route:'homework',label:'Homework',icon:'homework'},
       {route:'reports',label:'Reports',icon:'reports'},

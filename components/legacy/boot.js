@@ -12,6 +12,7 @@ import './pages/platform';
 import './pages/admissions';
 import './pages/people';
 import './pages/academics';
+import './pages/daily';
 import './pages/finance';
 import './pages/comms';
 import './pages/media';

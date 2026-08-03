@@ -92,6 +92,18 @@
     creditUp:'<path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><rect x="4" y="17" width="16" height="4" rx="1.5"/>',
     smile:'<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a5 5 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01"/>',
     grid:'<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/>',
+    /* Daily Activity kinds */
+    dropoff:'<path d="M4 16.5V12l2-5h12l2 5v4.5"/><path d="M2.5 12h19"/><circle cx="7.5" cy="16.5" r="1.8"/><circle cx="16.5" cy="16.5" r="1.8"/><path d="M5.5 18.3v1.4M18.5 18.3v1.4"/>',
+    sun:'<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"/>',
+    abacus:'<rect x="3.5" y="3.5" width="17" height="17" rx="2.5"/><path d="M3.5 9h17M3.5 15h17"/><path d="M9 3.5v17M15 3.5v17"/>',
+    apple:'<path d="M12 8c-1-2.5-3.2-3.4-5-2.4C4.8 6.8 4 9.6 5 13c.9 3 2.6 5.6 4.4 5.9 1 .2 1.8-.4 2.6-.4s1.6.6 2.6.4c1.8-.3 3.5-2.9 4.4-5.9 1-3.4.2-6.2-2-7.4-1.8-1-4 -.1-5 2.4z"/><path d="M12 8V5.5"/><path d="M12 5.5c1.6 0 2.8-1 3-2.5-1.7-.2-3 .8-3 2.5z"/>',
+    book:'<path d="M12 6.5C10.5 5 8.3 4.4 5 4.6a1 1 0 0 0-1 1v11.6a1 1 0 0 0 1.1 1c3-.2 5.2.3 6.9 1.7"/><path d="M12 6.5c1.5-1.5 3.7-2.1 7-1.9a1 1 0 0 1 1 1v11.6a1 1 0 0 1-1.1 1c-3-.2-5.2.3-6.9 1.7"/><path d="M12 6.5V20"/>',
+    lunch:'<path d="M4 4v6a2.5 2.5 0 0 0 5 0V4"/><path d="M6.5 10v10"/><path d="M17 4c-1.8 0-3 2-3 5s1.2 4 3 4"/><path d="M17 4v16"/>',
+    ball:'<circle cx="12" cy="12" r="9"/><path d="M12 3v4.5M12 16.5V21M3 12h4.5M16.5 12H21"/><path d="m6.5 6.5 3 3M17.5 6.5l-3 3M6.5 17.5l3-3M17.5 17.5l-3-3"/>',
+    moon:'<path d="M20.5 14.3A8.5 8.5 0 0 1 9.7 3.5a8.5 8.5 0 1 0 10.8 10.8z"/>',
+    palette:'<path d="M12 3a9 9 0 0 0 0 18c1.4 0 2.2-.9 2.2-2 0-.6-.2-1-.6-1.4-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.9-1.8H17a4.5 4.5 0 0 0 4.5-4.5C21.5 6.1 17.3 3 12 3z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10" cy="7" r="1.2"/><circle cx="15" cy="7.5" r="1.2"/>',
+    drag:'<circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/>',
+    phone2:'<rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 5.5h3"/><path d="M10.8 18.5h2.4"/>',
   };
   window.MCIcon = function(name, cls){
     const p = P[name] || P.info;
