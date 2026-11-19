@@ -99,6 +99,152 @@ window.Pages=window.Pages||{};
   };
 
   /* ---------- Invoices ---------- */
+  /* ---------- Parent-app "Fees" screen preview ----------
+     Shows the family side of whatever the school sends from this page:
+     outstanding balance, Pay now via PayFast, and their recent invoices. */
+  const INV_STATE={parent:null};
+
+  function previewParent(){
+    if(INV_STATE.parent){
+      const p=DB.parents.find(x=>x.name===INV_STATE.parent);
+      if(p) return p;
+    }
+    // Default to the family with the fullest billing history (and ideally a
+    // balance owing) so the preview shows a realistic screen, not an empty one.
+    let best=null,bestScore=-1;
+    DB.parents.forEach(p=>{
+      const mine=DB.invoices.filter(i=>i.parent===p.name);
+      if(!mine.length) return;
+      const score=mine.length*2+(mine.some(i=>i.status!=='Paid')?3:0);
+      if(score>bestScore){bestScore=score;best=p;}
+    });
+    return best||DB.parents[0];
+  }
+
+  function feesPhone(){
+    const p=previewParent();
+    const mine=DB.invoices.filter(i=>i.parent===p.name);
+    const unpaid=mine.filter(i=>i.status!=='Paid');
+    const outstanding=unpaid.reduce((a,i)=>a+i.amount,0);
+    const paidYTD=mine.filter(i=>i.status==='Paid').reduce((a,i)=>a+i.amount,0);
+    const nextDue=unpaid.length?unpaid[0].due:'—';
+    const recent=mine.slice(0,4);
+    const overdue=mine.some(i=>i.status==='Overdue');
+    const PILL={Paid:['#DCFCE7','#15803D'],Due:['#FEF3C7','#B45309'],Overdue:['#FEE2E2','#B91C1C']};
+
+    return `
+      <div class="mc-phone">
+        <div class="mc-phone-screen">
+          <div class="mc-ph-status"><span>10:39</span><span>${MCIcon('phone2')}</span></div>
+          <div class="mc-ph-head">
+            <span>${MCIcon('chevLeft')}</span>
+            <span class="mc-ph-title">Fees &amp; Payments</span>
+            <span>${MCIcon('bell')}</span>
+          </div>
+          <div class="mc-ph-body">
+            <div class="mcf-hi">${esc(p.name.split(' ')[0])} · ${esc(p.branch)}</div>
+
+            <div class="mcf-balance">
+              <div class="mcf-bal-lbl">OUTSTANDING BALANCE</div>
+              <div class="mcf-bal-amt">${R(outstanding)}</div>
+              <div class="mcf-bal-sub">
+                ${outstanding
+                  ? `${unpaid.length} unpaid invoice${unpaid.length>1?'s':''} · due ${esc(nextDue)}`
+                  : 'You’re all paid up — thank you! 🎉'}
+              </div>
+              ${outstanding?`
+                <button class="mcf-pay">${MCIcon('lock')} Pay now</button>
+                <div class="mcf-secure">Secured by <b>PayFast</b></div>
+                <div class="mcf-methods">
+                  <span>Card</span><span>Instant EFT</span><span>Capitec Pay</span><span>SnapScan</span>
+                </div>`
+              :`<div class="mcf-secure" style="margin-top:12px">Next invoice: 1 Sep 2026</div>`}
+              ${overdue?`<div class="mcf-overdue">${MCIcon('alert')} One invoice is overdue</div>`:''}
+            </div>
+
+            <div class="mcf-mini">
+              <div class="mcf-mini-box">
+                <div class="mcf-mini-val">${Rk(paidYTD)}</div>
+                <div class="mcf-mini-lbl">Paid this year</div>
+              </div>
+              <div class="mcf-mini-box">
+                <div class="mcf-mini-val">${mine.length}</div>
+                <div class="mcf-mini-lbl">Total invoices</div>
+              </div>
+            </div>
+
+            <div class="mcf-sec"><span>Recent invoices</span><b>View all</b></div>
+            ${recent.length?recent.map(i=>{
+              const c=PILL[i.status]||PILL.Due;
+              return `
+              <div class="mcf-inv">
+                <span class="mcf-inv-ic">${MCIcon('invoices')}</span>
+                <div style="min-width:0;flex:1">
+                  <div class="mcf-inv-desc">${esc(i.desc)}</div>
+                  <div class="mcf-inv-meta">${esc(i.id)} · ${esc(i.issued)}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0">
+                  <div class="mcf-inv-amt">${R(i.amount)}</div>
+                  <span class="mcf-pill" style="background:${c[0]};color:${c[1]}">${esc(i.status)}</span>
+                </div>
+              </div>`;}).join('')
+            :`<div class="mcf-inv" style="justify-content:center;color:var(--ink-400);font-size:11px">No invoices yet</div>`}
+
+            <div class="mcf-help">${MCIcon('messages')} Question about your bill? Message the office.</div>
+          </div>
+          <div class="mc-ph-tabs">
+            <span class="on">${MCIcon('dashboard')}<i>Home</i></span>
+            <span>${MCIcon('calendar')}<i>Calendar</i></span>
+            <span>${MCIcon('messages')}<i>Messages</i></span>
+            <span>${MCIcon('parents')}<i>Profile</i></span>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  const FEES_CSS=`
+    <style>
+      @media(max-width:1250px){#invWrap{grid-template-columns:1fr}}
+      .mcf-hi{font-size:11px;color:var(--ink-500);font-weight:600;margin-bottom:10px}
+      .mcf-balance{background:linear-gradient(145deg,#0B3B32,#13735A);border-radius:20px;
+        padding:16px 15px;color:#fff;margin-bottom:12px}
+      .mcf-bal-lbl{font-size:8.5px;font-weight:800;letter-spacing:.11em;opacity:.75}
+      .mcf-bal-amt{font-size:30px;font-weight:800;letter-spacing:-.025em;line-height:1.1;margin:3px 0 2px}
+      .mcf-bal-sub{font-size:10.5px;opacity:.85;line-height:1.4}
+      .mcf-pay{width:100%;margin-top:13px;background:#fff;color:#0B3B32;border-radius:12px;
+        padding:11px;font-size:13.5px;font-weight:800;display:flex;align-items:center;
+        justify-content:center;gap:7px}
+      .mcf-pay svg{width:14px;height:14px}
+      .mcf-secure{font-size:9.5px;text-align:center;opacity:.8;margin-top:7px}
+      .mcf-methods{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;margin-top:9px}
+      .mcf-methods span{font-size:8.5px;font-weight:700;background:rgba(255,255,255,.17);
+        border-radius:99px;padding:3px 8px}
+      .mcf-overdue{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.14);
+        border-radius:10px;padding:7px 9px;font-size:10px;font-weight:700;margin-top:10px}
+      .mcf-overdue svg{width:12px;height:12px;flex-shrink:0}
+      .mcf-mini{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+      .mcf-mini-box{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+      .mcf-mini-val{font-size:15px;font-weight:800;color:#0B3B32;letter-spacing:-.01em}
+      .mcf-mini-lbl{font-size:9.5px;color:var(--ink-500);font-weight:600;margin-top:1px}
+      .mcf-sec{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+      .mcf-sec span{font-size:12.5px;font-weight:800;color:#0B3B32}
+      .mcf-sec b{font-size:10px;color:#13735A;font-weight:700}
+      .mcf-inv{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--line);
+        border-radius:14px;padding:10px 11px;margin-bottom:7px}
+      .mcf-inv-ic{width:30px;height:30px;border-radius:10px;background:#EAF6F1;color:#13735A;
+        display:grid;place-items:center;flex-shrink:0}
+      .mcf-inv-ic svg{width:14px;height:14px}
+      .mcf-inv-desc{font-size:11.5px;font-weight:700;color:#0B3B32;
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .mcf-inv-meta{font-size:9px;color:var(--ink-400);margin-top:1px}
+      .mcf-inv-amt{font-size:12px;font-weight:800;color:#0B3B32;font-variant-numeric:tabular-nums}
+      .mcf-pill{display:inline-block;font-size:8px;font-weight:800;border-radius:99px;
+        padding:2px 7px;margin-top:3px}
+      .mcf-help{display:flex;align-items:center;gap:7px;background:#F2EFE8;border-radius:12px;
+        padding:9px 11px;font-size:10px;color:var(--ink-600);font-weight:600;margin-top:10px}
+      .mcf-help svg{width:13px;height:13px;flex-shrink:0;color:#13735A}
+    </style>`;
+
   Pages.invoices={
     render(){
       const rows=App.scoped(DB.invoices);
@@ -157,15 +303,50 @@ window.Pages=window.Pages||{};
           ${UI.statCard({icon:'waiting',tint:'t-amber',label:'Due',value:F(due*3),deltaHtml:`<span class="delta flat">value R48,900</span>`})}
           ${UI.statCard({icon:'alert',tint:'t-red',label:'Overdue',value:F(over*2),deltaHtml:`<span class="delta flat">value R35,450</span>`})}
         </div>
-        <div class="card">
-          <div class="card-head"><div><h3>All invoices</h3></div><span class="spacer"></span>
-            <div class="toolbar" style="margin:0"><div class="input-wrap" style="min-width:220px">${MCIcon('search')}<input id="invQ" placeholder="Search invoices…"></div></div></div>
-          <div class="card-body" style="padding:0;padding-top:8px">${tbl}</div>
-        </div>`;
+        <div class="grid" style="grid-template-columns:1fr 360px;align-items:start" id="invWrap">
+          <div class="card">
+            <div class="card-head"><div><h3>All invoices</h3></div><span class="spacer"></span>
+              <div class="toolbar" style="margin:0"><div class="input-wrap" style="min-width:200px">${MCIcon('search')}<input id="invQ" placeholder="Search invoices…"></div></div></div>
+            <div class="card-body" style="padding:0;padding-top:8px">${tbl}</div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <div><h3>Parent app — Fees tab</h3>
+                <div class="sub">What the family sees when you send an invoice</div></div>
+            </div>
+            <div class="card-body" style="padding-top:12px">
+              <button class="select" id="invPrevParent" style="width:100%;justify-content:space-between;margin-bottom:14px">
+                <span style="display:inline-flex;align-items:center;gap:7px;min-width:0">
+                  ${MCIcon('parents')}<span style="overflow:hidden;text-overflow:ellipsis">${esc(previewParent().name)}</span>
+                </span>${MCIcon('chevDown')}
+              </button>
+              <div style="display:flex;justify-content:center">${feesPhone()}</div>
+              <div class="divider"></div>
+              <p class="small muted" style="line-height:1.55">
+                Invoices sent from this page appear here instantly. Parents tap
+                <b style="color:var(--ink-700)">Pay now</b> and settle by card, Instant EFT,
+                Capitec Pay or SnapScan through <b style="color:var(--ink-700)">PayFast</b> —
+                the invoice flips to <b style="color:var(--ink-700)">Paid</b> and the payment
+                lands in Finance → Payments automatically.
+              </p>
+            </div>
+          </div>
+        </div>
+        ${FEES_CSS}`;
     },
     mount(root){
       root.querySelector('#invQ').addEventListener('input',e=>UI.tableFilter(Pages.invoices._tid,e.target.value));
       root.querySelector('#invRules').addEventListener('click',()=>App.go('settings'));
+      // Switch which family's phone you're previewing
+      root.querySelector('#invPrevParent').addEventListener('click',e=>{
+        const withInv=DB.parents.filter(p=>DB.invoices.some(i=>i.parent===p.name)).slice(0,14);
+        const list=withInv.length?withInv:DB.parents.slice(0,14);
+        UI.menu(e.currentTarget,list.map(p=>({label:p.name,icon:'parents',
+          checked:previewParent().name===p.name,
+          onClick:()=>{INV_STATE.parent=p.name;App.refresh();}})),
+          {head:'Preview as',scroll:true});
+      });
       root.querySelector('#invNew').addEventListener('click',()=>UI.modal({
         title:'New Invoice',
         body:`<div class="field"><label>Bill to</label><select data-f="parent">${DB.parents.slice(0,20).map(p=>`<option>${esc(p.name)}</option>`).join('')}</select></div>
