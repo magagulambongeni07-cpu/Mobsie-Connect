@@ -1,0 +1,27 @@
+{
+  "name": "sir",
+  "city": "",
+  "units": "celsius",
+
+  "voice": "en-GB-RyanNeural",
+  "voice_rate": "-8%",
+
+  "model": "sonnet",
+
+  "clap_threshold": 0.35,
+  "clap_min_gap": 0.12,
+  "clap_max_gap": 0.8,
+
+  "listen_timeout": 8,
+  "idle_turns_before_sleep": 2,
+
+  "apps": {
+    "browser": "firefox",
+    "music": "spotify",
+    "notes": "obsidian"
+  },
+  "websites": {
+    "youtube": "https://www.youtube.com",
+    "gmail": "https://mail.google.com"
+  }
+}
